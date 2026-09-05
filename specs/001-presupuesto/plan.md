@@ -3,7 +3,7 @@
 **Estado:** borrador, pendiente de aprobación
 **Spec:** `specs/001-presupuesto/spec.md`
 **Constitución aplicable:** v2.0.0
-**Motor:** SQL Server, T-SQL
+**Motor:** PostgreSQL sobre Supabase
 
 ---
 
@@ -13,8 +13,8 @@ Cada una con su alternativa descartada, porque son las que después no se pueden
 
 ### D1 — Clave subrogada, número de presupuesto único
 
-`Trabajos` lleva `id_trabajo INT IDENTITY` como clave primaria y `numero_presupuesto INT NULL` con
-índice único filtrado sobre los no nulos.
+`trabajos` lleva `id_trabajo` (identidad generada) como clave primaria y `numero_presupuesto INTEGER`
+con índice único parcial sobre los no nulos.
 
 La spec (RF-002) pide que el número del talonario sea el identificador del sistema, y lo es: es único,
 es por el que se busca, y es el que se dicta por teléfono. Pero hacerlo clave primaria impediría
@@ -33,7 +33,7 @@ importe por fuera del camino previsto.
 
 ### D3 — La patente se normaliza en la base, no se confía en quien la manda
 
-`Vehiculos.patente` guarda lo que llegó, y una columna calculada derivada mantiene `patente_norm` en
+`vehiculos.patente` guarda lo que llegó, y una columna generada almacenada mantiene `patente_norm` en
 mayúsculas sin espacios, guiones ni puntos. El índice único va sobre la derivada.
 
 La herramienta ya normaliza, pero es un consumidor entre varios y el dato importado del pasado viene
@@ -56,8 +56,8 @@ que sí se exige es que sea única, porque de eso depende no duplicar vehículos
 
 ### D4 — El snapshot de lo impreso vive en el trabajo
 
-`Trabajos` guarda `txt_cliente`, `txt_direccion`, `txt_telefono`, `txt_vehiculo` y `txt_patente`, además
-de las referencias a `Clientes` y `Vehiculos`.
+`trabajos` guarda `txt_cliente`, `txt_direccion`, `txt_telefono`, `txt_vehiculo` y `txt_patente`, además
+de las referencias a `clientes` y `vehiculos`.
 
 No viola el principio V. Lo que decía el papel y el dato maestro de hoy son hechos distintos: corregir un
 nombre mal escrito en la ficha de un cliente no puede cambiar lo que dice un presupuesto ya entregado.
@@ -77,62 +77,86 @@ Un presupuesto sin nombre de cliente entra con `id_cliente` nulo. Sin patente, c
 ### D6 — Fechas: una es local, las otras son UTC
 
 `fecha_presupuesto` es `DATE`: es la fecha que se escribe en el papel, sin hora ni zona.
-`creado_en` y `modificado_en` son `DATETIME2(0)` **en UTC**, porque así los emite la herramienta.
+`creado_en` y `modificado_en` son `TIMESTAMPTZ`, y la herramienta ya los emite en UTC.
 
-Se documenta en el diccionario para que nadie los compare ingenuamente. No se usa `DATETIMEOFFSET`: no
-hay más de una zona en juego y agregaría ruido a cada consulta.
+`TIMESTAMPTZ` en vez de `TIMESTAMP` porque Postgres lo normaliza a UTC al guardar y lo devuelve en la
+zona del cliente, que es exactamente lo que hace falta cuando la app y la base no están en la misma
+máquina. Se documenta en el diccionario para que nadie compare `fecha_presupuesto` con ellos.
+
+### D7 — El esquema es la API
+
+Supabase expone cada tabla y cada vista como endpoint REST sin escribir código. Eso convierte al
+principio III en algo físico: las vistas de derivación son el contrato, y lo que no está expuesto no
+existe para ningún consumidor.
+
+Consecuencia práctica: el diseño de las vistas no es una comodidad interna, es diseño de API. Se nombran
+y se estabilizan como tales, y cambiarles una columna rompe consumidores.
+
+### D8 — RLS desde la primera migración, con login
+
+La página del presupuesto está publicada en un repositorio público, así que la clave anónima de Supabase
+va a ser visible para cualquiera. Eso es correcto por diseño **sólo si** las políticas de acceso están
+puestas: sin RLS, esa clave alcanza para leer toda la cobranza del taller y para escribir presupuestos
+falsos.
+
+Por lo tanto: RLS habilitado en todas las tablas desde la migración inicial, y el rol anónimo sin ningún
+permiso. Leer y escribir exige sesión iniciada. Las personas que cargan son tres, así que alcanza con
+usuarios de Supabase Auth y una política única de «usuario autenticado»; no hacen falta roles por ahora.
+
+No se difiere para después. Una tabla que nace sin RLS queda expuesta desde el minuto uno, y el momento
+en que alguien se acuerda suele ser tarde.
 
 ---
 
 ## Esquema
 
-### `Clientes`
+### `clientes`
 
 | Columna | Tipo | Nulo | Notas |
 |---|---|---|---|
-| `id_cliente` | `INT IDENTITY` | no | PK |
-| `nombre` | `NVARCHAR(120)` | no | único dato exigido (RF-013) |
-| `nombre_norm` | `AS (...) PERSISTED` | no | mayúsculas, recortado, para buscar y deduplicar |
-| `telefono` | `NVARCHAR(40)` | sí | |
-| `direccion` | `NVARCHAR(200)` | sí | |
-| `email` | `NVARCHAR(120)` | sí | no lo captura el presupuesto; queda para la app |
-| `cuit` | `NVARCHAR(20)` | sí | ídem |
-| `creado_en` | `DATETIME2(0)` | no | `SYSUTCDATETIME()` |
+| `id_cliente` | `INT GEN. IDENTITY` | no | PK |
+| `nombre` | `TEXT` | no | único dato exigido (RF-013) |
+| `nombre_norm` | `GENERATED ... STORED` | no | mayúsculas, recortado, para buscar y deduplicar |
+| `telefono` | `TEXT` | sí | |
+| `direccion` | `TEXT` | sí | |
+| `email` | `TEXT` | sí | no lo captura el presupuesto; queda para la app |
+| `cuit` | `TEXT` | sí | ídem |
+| `creado_en` | `TIMESTAMPTZ` | no | `now()` |
 
 Sin restricción única sobre el nombre: dos clientes pueden llamarse igual. Índice no único sobre
 `nombre_norm` para búsqueda por parte del nombre.
 
-### `Vehiculos`
+### `vehiculos`
 
 | Columna | Tipo | Nulo | Notas |
 |---|---|---|---|
-| `id_vehiculo` | `INT IDENTITY` | no | PK |
-| `patente` | `NVARCHAR(15)` | no | como llegó |
-| `patente_norm` | `AS (...) PERSISTED` | no | **UNIQUE** |
-| `descripcion` | `NVARCHAR(120)` | sí | «Ford Ranger», sin separar marca ni modelo (RF-011) |
-| `id_cliente_ultimo` | `INT` | sí | FK, sólo para proponer (RF-012) |
-| `creado_en` | `DATETIME2(0)` | no | |
+| `id_vehiculo` | `INT GEN. IDENTITY` | no | PK |
+| `patente` | `TEXT` | no | como llegó |
+| `patente_norm` | `GENERATED ... STORED` | no | **UNIQUE** |
+| `descripcion` | `TEXT` | sí | «Ford Ranger», sin separar marca ni modelo (RF-011) |
+| `id_cliente_ultimo` | `INTEGER` | sí | FK, sólo para proponer (RF-012) |
+| `creado_en` | `TIMESTAMPTZ` | no | |
 
-### `Trabajos`
+### `trabajos`
 
 | Columna | Tipo | Nulo | Notas |
 |---|---|---|---|
-| `id_trabajo` | `INT IDENTITY` | no | PK |
-| `numero_presupuesto` | `INT` | sí | **único filtrado**, ≥ 16000, `CHECK` de rango |
-| `id_cliente` | `INT` | sí | FK |
-| `id_vehiculo` | `INT` | sí | FK |
+| `id_trabajo` | `INT GEN. IDENTITY` | no | PK |
+| `numero_presupuesto` | `INTEGER` | sí | **único filtrado**, ≥ 16000, `CHECK` de rango |
+| `id_cliente` | `INTEGER` | sí | FK |
+| `id_vehiculo` | `INTEGER` | sí | FK |
 | `fecha_presupuesto` | `DATE` | sí | RF-008: puede faltar |
-| `txt_cliente` | `NVARCHAR(120)` | sí | snapshot |
-| `txt_direccion` | `NVARCHAR(200)` | sí | snapshot |
-| `txt_telefono` | `NVARCHAR(40)` | sí | snapshot |
-| `txt_vehiculo` | `NVARCHAR(120)` | sí | snapshot |
-| `txt_patente` | `NVARCHAR(15)` | sí | snapshot |
-| `monto_mano_obra` | `DECIMAL(12,2)` | no | default 0 |
-| `no_concretado` | `BIT` | no | default 0 (RF-015) |
-| `origen` | `VARCHAR(12)` | sí | `particular` / `siniestro`; **nulo al nacer** (RF-014) |
-| `creado_en` | `DATETIME2(0)` | no | UTC, viene del origen si se importa |
-| `modificado_en` | `DATETIME2(0)` | no | UTC, ídem |
-| `origen_carga` | `VARCHAR(20)` | no | `presupuesto_web` / `manual` / `importacion` |
+| `txt_cliente` | `TEXT` | sí | snapshot |
+| `txt_direccion` | `TEXT` | sí | snapshot |
+| `txt_telefono` | `TEXT` | sí | snapshot |
+| `txt_vehiculo` | `TEXT` | sí | snapshot |
+| `txt_patente` | `TEXT` | sí | snapshot |
+| `monto_mano_obra` | `NUMERIC(12,2)` | no | default 0 |
+| `no_concretado` | `BOOLEAN` | no | default 0 (RF-015) |
+| `origen` | `TEXT` | sí | `particular` / `siniestro`; **nulo al nacer** (RF-014) |
+| `creado_en` | `TIMESTAMPTZ` | no | UTC, viene del origen si se importa |
+| `modificado_en` | `TIMESTAMPTZ` | no | UTC, ídem |
+| `origen_carga` | `TEXT` | no | `presupuesto_web` / `manual` / `importacion` |
 
 `origen` se declara acá, nulo, aunque su uso llegue en otro feature: es el único campo que la spec
 nombra explícitamente como parte del ciclo de vida (RF-014), y agregarlo después obliga a una migración
@@ -140,33 +164,33 @@ sobre una tabla ya poblada.
 
 Sin `estado_operativo` todavía: no lo pide esta spec. Cuando llegue, es una columna más, no un rediseño.
 
-### `TrabajoItems`
+### `trabajo_items`
 
 | Columna | Tipo | Nulo | Notas |
 |---|---|---|---|
-| `id_item` | `INT IDENTITY` | no | PK |
-| `id_trabajo` | `INT` | no | FK, `ON DELETE CASCADE` |
+| `id_item` | `INT GEN. IDENTITY` | no | PK |
+| `id_trabajo` | `INTEGER` | no | FK, `ON DELETE CASCADE` |
 | `orden` | `SMALLINT` | no | preserva el orden de carga |
-| `detalle` | `NVARCHAR(200)` | sí | puede venir vacío con importe cargado |
-| `importe` | `DECIMAL(12,2)` | no | default 0 |
+| `detalle` | `TEXT` | sí | puede venir vacío con importe cargado |
+| `importe` | `NUMERIC(12,2)` | no | default 0 |
 
 Sin columna `tipo`: la spec (RF-006) dice que no se clasifican. Los campos de seguimiento de repuesto
 —pedido, recibido, costo, proveedor— son de otro feature y se agregan acá cuando llegue.
 
 ### Índices
 
-- `Vehiculos(patente_norm)` único — es la búsqueda número uno del sistema.
-- `Trabajos(numero_presupuesto)` único filtrado sobre no nulos.
-- `Trabajos(id_vehiculo, fecha_presupuesto DESC)` — historial de un auto.
-- `Trabajos(id_cliente)` — presupuestos de un cliente.
-- `TrabajoItems(id_trabajo, orden)` — traer los conceptos en orden.
-- `Clientes(nombre_norm)` — búsqueda por parte del nombre.
+- `vehiculos(patente_norm)` único — es la búsqueda número uno del sistema.
+- `trabajos(numero_presupuesto)` único parcial sobre no nulos.
+- `trabajos(id_vehiculo, fecha_presupuesto DESC)` — historial de un auto.
+- `trabajos(id_cliente)` — presupuestos de un cliente.
+- `trabajo_items(id_trabajo, orden)` — traer los conceptos en orden.
+- `clientes(nombre_norm)` — búsqueda por parte del nombre.
 
 ---
 
 ## Vistas
 
-`vw_Presupuestos` — una fila por trabajo, con los totales derivados:
+`vw_presupuestos` — una fila por trabajo, con los totales derivados:
 
 ```
 id_trabajo, numero_presupuesto, fecha_presupuesto,
@@ -189,16 +213,16 @@ No se crea ninguna vista de color, prioridad ni alerta: principio III, eso lo de
 
 Tres pasos, sin lógica de negocio escondida en un trigger.
 
-1. **Staging.** `stg_PresupuestoCsv` con las catorce columnas como texto, más `linea` y `lote`. Se carga
+1. **Staging.** `stg_presupuesto_csv` con las catorce columnas como texto, más `linea` y `lote`. Se carga
    crudo, sin convertir ni validar. Un import fallido no deja nada a medias en las tablas reales.
 2. **Validación.** Un procedimiento revisa el lote y reporta lo que no pasa —número no entero, importes
    no numéricos, un detalle sin importe— sin escribir en las tablas reales. Lo que falla se informa por
    número de línea, como hace la herramienta.
-3. **Consolidación.** Por cada número del lote: se resuelven vehículo y cliente (D5), se hace `MERGE`
+3. **Consolidación.** Por cada número del lote: se resuelven vehículo y cliente (D5), se hace un upsert
    sobre `Trabajos` por `numero_presupuesto`, y los conceptos se reemplazan por completo — se borran los
    del trabajo y se insertan los del archivo, en orden.
 
-**Idempotencia (RF-018).** Reimportar el mismo archivo no crea nada nuevo: el `MERGE` empareja por
+**Idempotencia (RF-018).** Reimportar el mismo archivo no crea nada nuevo: el upsert empareja por
 número. Un trabajo existente se actualiza sólo si el `modificado_en` del archivo es posterior al
 guardado; si es igual o anterior, se saltea. Así un CSV viejo no pisa una corrección más nueva.
 
@@ -235,9 +259,10 @@ feature. Quedan como están hasta que su feature las rediseñe o las elimine.
 | III — magnitudes, no interpretación | Las vistas devuelven montos y cantidades. Ningún color ni prioridad. |
 | IV — el esquema no impide registrar | Todo nulo salvo el nombre del cliente y la patente del vehículo. |
 | V — cada hecho en un solo lugar | El snapshot es la excepción justificada de D4. |
-| VI — ningún automatismo financiero | Cero triggers. La importación es un procedimiento explícito. |
+| VI — ningún automatismo financiero | Cero triggers. La importación es una función que alguien invoca. |
 | VII, VIII — deuda y saldo | No aplican: este feature no toca dinero adeudado. |
 | IX — alcance | No se crea ninguna tabla de la lista prohibida. |
+| Alcance v3.0.0 — políticas de acceso | D8: RLS en todas las tablas desde la migración inicial. |
 | X — la spec precede | Este plan deriva de la spec y no agrega requisitos nuevos. |
 
 ---
@@ -251,7 +276,11 @@ feature. Quedan como están hasta que su feature las rediseñe o las elimine.
 - **Reimportar reemplaza los conceptos**, así que sus `id_item` cambian. Nada depende todavía de esos
   ids; cuando el seguimiento de repuestos cuelgue de ellos, esta decisión hay que revisarla.
 
+- **La clave anónima queda pública** en el repositorio del presupuesto. Mitigado por D8, pero depende de
+  que ninguna tabla futura nazca sin RLS. Conviene verificarlo en cada migración.
+
 ## Pendiente antes de implementar
 
-Dónde va a correr SQL Server para que la herramienta pueda escribirle. No afecta al esquema —es el mismo
-corra donde corra— pero sí a cuándo se puede conectar el presupuesto.
+- Crear el proyecto de Supabase y decidir la región.
+- Dar de alta los usuarios que van a cargar: vos, tu viejo y la administrativa.
+- Confirmar cómo entra el login en la página del presupuesto, que hoy no tiene ninguno.
