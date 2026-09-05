@@ -3,6 +3,8 @@
 **Estado:** borrador, pendiente de aprobación
 **Rama:** `claude/semaforo-taller-system-eroppo`
 **Constitución aplicable:** v2.0.0
+**Fuente verificada:** `tato22-alt/semaforo-presupuesto` @ `178fb1d`, publicada en
+https://tato22-alt.github.io/semaforo-presupuesto/
 
 ---
 
@@ -11,9 +13,14 @@
 El presupuesto es el nacimiento de todo trabajo del taller. Hoy su único respaldo estable es el
 duplicado del talonario, y cuando el talonario se pierde se pierde el precio acordado.
 
-Existe además un presupuesto digital en uso (`presupuesto.html`) que ya genera el documento, numera
-desde el 16001 continuando el talonario, y guarda el historial en el navegador. Ese historial vive en el
-`localStorage` de una máquina: se pierde al limpiar el navegador o al cambiar de equipo.
+Existe además un presupuesto digital ya publicado que genera el documento, numera continuando el
+talonario y guarda el historial en el navegador. Ese historial vive en el `localStorage` de una máquina:
+se pierde al limpiar el navegador o al cambiar de equipo, y dos equipos distintos no se ven entre sí.
+
+La herramienta protege la numeración todo lo que se puede sin servidor —máximo histórico que nunca
+retrocede, bloqueo de una segunda pestaña, negativa a guardar si el historial está dañado— pero su
+propio README lo dice: eso reduce el riesgo, no lo elimina. La garantía sólo llega cuando la numeración
+la reparte la base.
 
 Esta spec define qué información sobre presupuestos tiene que poder registrar y responder la base, para
 que el presupuesto deje de depender del papel y del navegador.
@@ -57,11 +64,16 @@ a la base sin volver a tipearlos.
 ### Identidad y numeración
 
 - **RF-001** — Cada presupuesto tiene un número único, correlativo, que continúa la numeración del
-  talonario físico. El primero de la serie digital es el **16001**.
+  talonario físico. El primero de la serie digital es el **16000**.
 - **RF-002** — Ese número es el identificador del trabajo en todo el sistema. No existe una segunda
   numeración paralela: el número que se dicta por teléfono es el mismo que se busca en la base.
 - **RF-003** — Presupuestar crea el trabajo. No hay un paso posterior de conversión ni una entidad
   separada que después haya que vincular.
+- **RF-020** — Un número emitido no se reutiliza nunca, ni siquiera si el presupuesto se borra. La serie
+  puede tener huecos, y eso es correcto: la alternativa es arriesgarse a que dos presupuestos distintos
+  lleven el mismo número.
+- **RF-021** — La base es la autoridad de la numeración. La herramienta actual reparte números por
+  dispositivo porque no tiene con qué hacerlo mejor; cuando se conecte, el número lo entrega la base.
 
 ### Contenido del presupuesto
 
@@ -96,7 +108,8 @@ a la base sin volver a tipearlos.
 - **RF-014** — Un trabajo nace del presupuesto sin origen definido. No siempre se sabe en el momento si
   va a ir por seguro o como particular; el esquema no puede exigirlo al crear.
 - **RF-015** — Un presupuesto que no se concreta se marca como tal y deja de aparecer en lo activo, sin
-  perder consultabilidad.
+  perder consultabilidad. La herramienta de presupuesto no tiene hoy esta marca, así que el dato nace en
+  la base y no viene en la importación: todo lo importado entra como no marcado.
 - **RF-016** — Un presupuesto se puede corregir conservando su número. **Decisión consciente:** no se
   versiona el histórico de correcciones — el presupuesto vigente es el que está. Se acepta el riesgo de
   perder la traza de un importe corregido, a cambio de no agregar una tabla que nadie va a consultar.
@@ -104,9 +117,10 @@ a la base sin volver a tipearlos.
 ### Migración
 
 - **RF-017** — Los presupuestos exportados por la herramienta actual tienen que poder importarse. El
-  formato es el CSV que ya genera, con una fila por concepto y las columnas: `numero_presupuesto`,
-  `fecha_consulta`, `nombre_cliente`, `direccion`, `telefono`, `vehiculo`, `patente`, `detalle`,
-  `importe`, `subtotal_repuestos`, `monto_mano_obra`, `monto_total`.
+  formato es el CSV que genera, separado por `;`, con BOM, una fila por concepto y catorce columnas en
+  este orden: `numero_presupuesto`, `fecha_consulta`, `nombre_cliente`, `direccion`, `telefono`,
+  `vehiculo`, `patente`, `detalle`, `importe`, `subtotal_repuestos`, `monto_mano_obra`, `monto_total`,
+  `creado_en`, `modificado_en`.
 - **RF-018** — La importación tiene que ser repetible sin duplicar: reimportar el mismo archivo no crea
   presupuestos nuevos.
 - **RF-019** — Los datos importados pueden venir incompletos o inconsistentes — patentes mal escritas,
@@ -127,6 +141,38 @@ sola consulta:
 5. ¿Cuánto suma un presupuesto, y qué conceptos lo componen?
 6. ¿Qué presupuestos quedaron sin concretarse?
 7. ¿Cuántos presupuestos se hicieron en un mes y por qué monto total?
+
+---
+
+## Estructura real de la fuente
+
+Verificada sobre el código publicado, no supuesta. Es contra esto que se diseña el modelo.
+
+**Objeto raíz en `localStorage`**, clave `semaforo-presupuestos`:
+`{ version: 2, inicializado: true, maxEmitido: <entero>, guardados: [<presupuesto>] }`
+
+**Presupuesto:**
+
+| Campo | Forma | Notas |
+|---|---|---|
+| `numero` | entero | ≥ 16000, único, no se reutiliza |
+| `fecha` | `AAAA-MM-DD` | fecha de la consulta, no de emisión; puede venir vacía |
+| `cliente`, `direccion`, `telefono` | texto | pueden venir vacíos |
+| `vehiculo` | texto | descripción libre, sin separar marca ni modelo |
+| `patente` | texto | normalizada a mayúsculas sin espacios, guiones ni puntos |
+| `items[]` | `{ detalle, importe }` | en orden; se descarta el que no tiene ni detalle ni importe, así que puede haber un importe sin detalle pero no un detalle sin importe |
+| `subtotal_repuestos` | número | suma de los importes de `items` |
+| `monto_mano_obra` | número | monto único, fuera de `items` |
+| `monto_total` | número | `subtotal_repuestos + monto_mano_obra` |
+| `creado_en`, `modificado_en` | ISO 8601 UTC | se conservan al reabrir del historial |
+
+**Sobre los importes:** son números de coma flotante, redondeados a entero al salir de cada campo. En la
+práctica llegan enteros, pero el modelo no debe asumirlo.
+
+**Sobre el CSV:** todo presupuesto deja al menos una fila, incluso sin conceptos. La mano de obra se
+exporta como una fila extra con detalle `Mano de obra`, y al leerla hay que descartarla por la columna
+`monto_mano_obra` y no por ese texto — un repuesto podría llamarse igual. Los totales se recalculan
+desde los renglones; las columnas de totales del archivo son informativas.
 
 ---
 
@@ -156,8 +202,6 @@ Usuarios y permisos.
 
 ## Pendientes de aclaración
 
-- **[ACLARAR]** ¿Desde qué número arrancan los presupuestos reales ya cargados? El código dice 16001,
-  pero hay que confirmar cuántos hay efectivamente cargados y desde cuándo.
 - **[ACLARAR]** ¿Puede un presupuesto cubrir dos vehículos del mismo cliente? Se asume que no: un
   presupuesto, un auto.
 - **[ACLARAR]** Cuando el trabajo se hace, ¿el total facturado es siempre el del presupuesto, o se ajusta
