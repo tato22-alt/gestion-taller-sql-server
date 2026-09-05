@@ -33,12 +33,26 @@ importe por fuera del camino previsto.
 
 ### D3 — La patente se normaliza en la base, no se confía en quien la manda
 
-`Vehiculos.patente` guarda lo que llegó, y una columna calculada `PERSISTED` deriva `patente_norm` en
+`Vehiculos.patente` guarda lo que llegó, y una columna calculada derivada mantiene `patente_norm` en
 mayúsculas sin espacios, guiones ni puntos. El índice único va sobre la derivada.
 
 La herramienta ya normaliza, pero es un consumidor entre varios y el dato importado del pasado viene
-sucio. Una columna calculada persistida no contradice el principio II: no la mantiene una persona, la
-mantiene el motor, y no se puede desactualizar.
+sucio. Una columna derivada mantenida por el motor no contradice el principio II: no la actualiza una
+persona, y no se puede desincronizar.
+
+**Formatos vigentes en Argentina**, ambos en circulación:
+
+| Formato | Patrón | Largo | Ejemplo |
+|---|---|---|---|
+| Anterior a 2016 | 3 letras + 3 dígitos | 6 | `AAR222` |
+| Mercosur | 2 letras + 3 dígitos + 2 letras | 7 | `AA000AA` |
+
+`patente_norm` se dimensiona en 10 caracteres: sobra para los dos y deja lugar para motos e importados.
+
+**La validación no bloquea.** Una función auxiliar dice si una patente encaja en alguno de los dos
+patrones, y la aplicación la usa para advertir mientras se tipea. El esquema no la exige: por el
+principio IV, un auto con patente rara, provisoria o mal cargada tiene que poder registrarse igual. Lo
+que sí se exige es que sea única, porque de eso depende no duplicar vehículos.
 
 ### D4 — El snapshot de lo impreso vive en el trabajo
 

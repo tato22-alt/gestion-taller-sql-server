@@ -98,6 +98,10 @@ a la base sin volver a tipearlos.
 - **RF-011** — El vehículo se identifica por patente, normalizada en mayúsculas y sin separadores, y se
   describe en un campo de texto libre. No se separan marca, modelo, año ni color: ninguna decisión del
   taller depende de tenerlos aparte.
+- **RF-022** — Conviven dos formatos de patente: el anterior a 2016 (`AAR222`, tres letras y tres
+  dígitos) y el Mercosur (`AA000AA`, dos letras, tres dígitos y dos letras). El sistema tiene que
+  reconocer ambos y advertir cuando una patente no encaja en ninguno — pero sin impedir guardarla, por
+  el principio IV.
 - **RF-012** — Un vehículo puede tener presupuestos de clientes distintos a lo largo del tiempo. El
   cliente del presupuesto es el de ese presupuesto; el vehículo recuerda el último conocido sólo para
   poder proponerlo.
