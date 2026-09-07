@@ -31,10 +31,10 @@ Corrido y verificado en Supabase, a mano, desde el editor SQL:
 | T009 | Vista sobre trabajo con 2 conceptos | 23000 + 1000 = 24000, derivado |
 | T010 | Las 7 preguntas | 6 responden; la 3 falla (hallazgo 1) |
 
-**Lo que NO se verificó nunca, y es el hueco más grande:** todas las pruebas se corrieron como
-`postgres` (que bypassea RLS) o como `anon` (que está bloqueado). **Nunca se probó como
-`authenticated`**, que es el único rol con el que la aplicación va a trabajar de verdad. Ver
-hallazgo 2.
+Esa tabla es el registro de la verificación **manual**, que resultó no ser confiable (ver H10).
+La verificación que vale hoy es `qa-001-verificacion.sql`: 41 comprobaciones en una sola
+consulta. Última corrida sobre PostgreSQL 16 con las nueve migraciones aplicadas desde cero:
+**38 PASA, 3 ABIERTO, 0 FALLA**, repetible y sin dejar filas.
 
 ---
 
@@ -60,7 +60,7 @@ cliente no existe. Lo carga de nuevo. Ahora hay dos "Pérez".
 
 ---
 
-### H2 — Nunca se probó que un usuario autenticado pueda leer y escribir
+### H2 — Nunca se probó que un usuario autenticado pueda leer y escribir · RESUELTO
 
 **Qué pasa.** Se verificó exhaustivamente que `anon` no puede hacer nada. No se verificó
 nunca lo contrario: que `authenticated` sí puede. Las pruebas se corrieron como `postgres`,
@@ -83,7 +83,9 @@ reset role;
 delete from clientes where nombre = 'Prueba autenticado';
 ```
 
-Es la verificación más barata y la que más riesgo saca. Debería correrse antes de seguir.
+**Resuelto.** Se corrió a mano contra Supabase: `authenticated` lee la vista y escribe sin
+problema. Además quedó automatizado en `qa-001-verificacion.sql`, verificaciones 36 y 37, así
+que se vuelve a comprobar en cada corrida y no depende de que alguien se acuerde.
 
 ---
 
@@ -220,6 +222,27 @@ vuelven de forma controlada en T016 (que ya existe en `tasks.md` justamente para
 
 ---
 
+### H10 — El método de verificación usado hasta acá era inválido · RESUELTO
+
+**Qué pasa.** El editor SQL de Supabase muestra **sólo el resultado de la última sentencia**
+de un bloque. Durante T001–T010 se verificó pegando bloques de varias sentencias y mirando un
+único resultado: el de la última. Todo lo anterior de cada bloque quedó sin mirar.
+
+**Caso real.** No es hipotético, pasó tres veces en esta implementación: se dio por buena una
+tabla que todavía no existía, se leyó como `false` una función que en realidad no se había
+ejecutado, y se confirmó un `insert` mirando el `Success` de otra línea. Cualquiera de esas
+podría haber sido una falla real dada por buena.
+
+**Resuelto.** Todo el QA es ahora **una sola función que devuelve una tabla de veredictos**
+(`qa-001-verificacion.sql`): una fila por verificación, con PASA / FALLA / ABIERTO. La única
+sentencia que devuelve resultados es la última, así que la limitación del editor deja de
+esconder nada.
+
+**Regla que queda:** ninguna verificación de este repositorio se hace con sentencias sueltas
+en un bloque. Se agrega como verificación a la función de QA, y se corre entera.
+
+---
+
 ## Lo que ya está previsto y no es hallazgo
 
 `tasks.md` ya contempla la mayor parte del QA que falta, y no hace falta inventar tareas:
@@ -240,9 +263,11 @@ datos que hoy no existen:
 
 ## Propuesta de orden
 
-1. Correr H2 ya (no cambia nada, y es donde más riesgo hay).
-2. Decidir H1, H3, H5, H7 — son enmiendas a la spec, y por el principio X van a la spec antes
+1. ~~Correr H2~~ — hecho: pasa, y quedó automatizado.
+2. Correr `qa-001-verificacion.sql` contra Supabase, para confirmar que la base real coincide
+   con lo verificado en local.
+3. Decidir H1, H3, H5, H7 — son enmiendas a la spec, y por el principio X van a la spec antes
    que a una migración.
-3. Decidir H4 y H8, que agregan tareas al plan.
-4. Limpiar H9 antes de cualquier dato real.
-5. Recién entonces, bloque D.
+4. Decidir H4 y H8, que agregan tareas al plan.
+5. Limpiar H9 antes de cualquier dato real.
+6. Recién entonces, bloque D — y cada tarea nueva suma sus verificaciones a la función de QA.
