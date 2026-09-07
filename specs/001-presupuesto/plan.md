@@ -269,34 +269,38 @@ Tres pasos, sin lógica de negocio escondida en un trigger.
    sobre `Trabajos` por `numero_presupuesto`, y los conceptos se reemplazan por completo — se borran los
    del trabajo y se insertan los del archivo, en orden.
 
-**Idempotencia (RF-018, enmendada por H13).** Reimportar el mismo archivo no crea nada nuevo: se
-empareja por número. Si el número **ya existe en la base, no se toca** — y si el archivo traía algo
-distinto, se informa por número de línea para que alguien lo mire.
+**Idempotencia (RF-018, decisión H13).** Reimportar el mismo archivo no crea nada nuevo: se empareja
+por número. Si el número **ya existe en la base, no se toca** — y si el archivo traía algo distinto, se
+informa por número de línea para que alguien lo mire. Como el CSV trae `modificado_en`, ese informe
+puede además decir cuál de las dos versiones es más nueva.
 
-La regla original comparaba el `modificado_en` del archivo contra el guardado. No se puede: el CSV
-real no trae ningún dato de tiempo, ni por presupuesto ni de la exportación (H12, H13). Sin forma de
-ordenar dos versiones, no pisar es la única regla que no puede perder en silencio una corrección hecha
-en la base — que es exactamente lo que la regla de `modificado_en` intentaba proteger. Y hace seguro
-importar el archivo de un segundo equipo: agrega lo que falta y nada más.
+Se descarta la regla original de actualizar cuando el archivo es más nuevo. Es implementable —
+`modificado_en` está en el CSV— pero cualquier actualización automática puede pisar una corrección
+hecha en la base, y no hay forma de distinguir una corrección deliberada de un dato viejo. Es también
+lo que hace la propia herramienta al restaurar: se queda con los números que no tenía y saltea el
+resto.
 
 **Lo que la importación nunca toca:** `no_concretado` y `origen`. No vienen en el archivo, y sobrescribir
 con un valor por defecto lo que alguien cargó en la base sería pérdida silenciosa de datos.
 
 **Los totales del archivo se ignoran.** Se recalculan desde los renglones, igual que hace la herramienta.
 
-**La fila «Mano de obra»** (regla corregida por H15). No se puede identificar por la columna
-`monto_mano_obra`: en el CSV real esa columna se repite en **todas** las filas del presupuesto, así
-que no distingue nada. Tampoco por el texto, porque un repuesto puede llamarse igual — y si además
-lleva el mismo importe, las dos filas salen byte a byte idénticas.
+**La fila «Mano de obra»** (regla tomada de la herramienta, H15). Ni la columna sola ni el texto solo
+alcanzan: `monto_mano_obra` se repite en **todas** las filas del presupuesto, y un repuesto puede
+llamarse "Mano de obra" — si además lleva el mismo importe, las dos filas salen idénticas.
 
-La regla exacta, derivada del generador: dentro de cada número, **en el orden del archivo**, si
-`monto_mano_obra` es distinto de cero entonces la **última fila del grupo** es la de mano de obra y se
-descarta; si es cero, todas son renglones. Después se descartan los renglones sin detalle y sin
-importe, igual que hace la herramienta al leer su propio formulario.
+La regla correcta es la que la propia herramienta usa al leer su CSV, y se adopta igual para no tener
+dos lecturas distintas del mismo archivo:
 
-Se verifica sola: la suma de los renglones que quedan tiene que dar `subtotal_repuestos`. Si no da, se
-reporta por número de línea. Esto exige que el staging conserve el orden del archivo — para eso está
-`linea`.
+> Si `monto_mano_obra` no es cero, recorrer las filas del presupuesto **de atrás hacia adelante** y
+> descartar **una sola**: la primera cuyo `detalle` sea exactamente `Mano de obra` **y** cuyo
+> `importe` sea igual a `monto_mano_obra`. Si `monto_mano_obra` es cero, no se descarta ninguna.
+
+Después se descartan los renglones sin detalle y sin importe, igual que hace la herramienta. Exige que
+el staging conserve el orden del archivo — para eso está `linea`.
+
+Como control, la suma de los renglones que quedan tiene que dar `subtotal_repuestos`. Si no da, se
+reporta por número de línea.
 
 ---
 

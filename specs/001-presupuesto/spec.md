@@ -142,21 +142,18 @@ a la base sin volver a tipearlos.
 ### Migración
 
 - **RF-017** — Los presupuestos exportados por la herramienta actual tienen que poder importarse. El
-  formato es el CSV que genera, separado por `;`, con BOM, una fila por concepto. **[PENDIENTE DE
-  CONFIRMAR — ver H12]** La lista de columnas de abajo es la de la versión contra la que se escribió
-  esta spec; el archivo que hoy usa el taller genera **doce** columnas, sin `creado_en` ni
-  `modificado_en`. Se corrige cuando se confirme cuál está publicada, mirando el encabezado de un CSV
-  exportado de verdad. Las catorce originales eran: `numero_presupuesto`, `fecha_consulta`, `nombre_cliente`, `direccion`, `telefono`,
+  formato es el CSV que genera, separado por `;`, con BOM, una fila por concepto y catorce columnas en
+  este orden: `numero_presupuesto`, `fecha_consulta`, `nombre_cliente`, `direccion`, `telefono`,
   `vehiculo`, `patente`, `detalle`, `importe`, `subtotal_repuestos`, `monto_mano_obra`, `monto_total`,
   `creado_en`, `modificado_en`.
 - **RF-018** — La importación tiene que ser repetible sin duplicar: reimportar el mismo archivo no crea
   presupuestos nuevos. **La importación agrega lo que falta y nunca pisa lo que ya está**: si el número
   ya existe en la base, no se toca, y se informa si el archivo traía algo distinto para que alguien lo
-  mire. *(Enmienda H13: el plan resolvía esto comparando `modificado_en` del archivo contra el
-  guardado, pero el CSV no trae ningún dato de tiempo — ni por presupuesto ni de la exportación. Sin
-  forma de saber qué versión es más nueva, la única regla que no puede perder una corrección hecha en
-  la base es no pisar. Además hace seguro importar el archivo de un segundo equipo: agrega lo que falta
-  y nada más.)*
+  mire. *(Decisión de Luciano en H13. Es además exactamente lo que hace la propia herramienta al
+  restaurar un CSV: `const nuevos = r.presupuestos.filter(p => !hay.has(p.numero))`. La regla original
+  del plan —actualizar si el `modificado_en` del archivo es posterior— sí es implementable, porque esa
+  columna existe; se descarta igual, porque no pisar es lo único que no puede perder en silencio una
+  corrección hecha en la base.)*
 - **RF-019** — Los datos importados pueden venir incompletos o inconsistentes — patentes mal escritas,
   clientes sin teléfono, el mismo cliente con el nombre escrito de dos maneras. La importación los acepta
   igual; no es tarea de la migración limpiar el pasado.

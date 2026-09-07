@@ -319,111 +319,97 @@ sólo difieren en la eñe queden fusionados; a cambio, los mismos clientes escri
 
 ---
 
-### H12 — La spec describe una versión de la herramienta que no es la actual
+### H12 — Hay dos versiones de la herramienta dando vueltas · CORREGIDO
 
-**Qué pasa.** Luciano entregó el HTML de la herramienta en uso ("este es el presupuesto online
-hoy"). No coincide con la sección "Estructura real de la fuente" de la spec, que dice estar
-verificada sobre `tato22-alt/semaforo-presupuesto @ 178fb1d`.
+**Cómo se registró primero, y por qué estaba mal.** Con el HTML que Luciano subió, di por hecho que
+esa era la herramienta publicada y anoté que la spec describía una versión inexistente. Era al revés.
+El CSV real y el código publicado (`tato22-alt/semaforo-presupuesto` @ `178fb1d`, el mismo commit que
+la spec cita) confirman que **la spec es exacta**:
 
-| La spec dice | El archivo entregado hace |
-|---|---|
-| CSV de **14 columnas**, con `creado_en` y `modificado_en` | CSV de **12 columnas**; esas dos no existen |
-| `{ version: 2, inicializado: true, maxEmitido, guardados }` | `{ guardados, proximo }` — sin `version`, sin `inicializado`, sin `maxEmitido` |
-| El primero de la serie es **16000** | `PRIMER_NUMERO = 16001` |
-| La patente se guarda "normalizada a mayúsculas sin espacios, guiones ni puntos" | Sólo `.trim()`; se guarda como se tipeó |
-| "máximo histórico que nunca retrocede, bloqueo de una segunda pestaña, negativa a guardar si el historial está dañado" | Ninguna de las tres existe. `Guardado.leer()` atrapa cualquier error y devuelve `null`, y ahí `proximo` vuelve a 16001 en silencio |
+| Lo que la spec dice | El publicado hace | ¿Coincide? |
+|---|---|---|
+| CSV de 14 columnas, con `creado_en` y `modificado_en` | `COLUMNAS` tiene las 14 | sí |
+| `{version, inicializado, maxEmitido, guardados}` | están las cuatro | sí |
+| La serie arranca en 16000 | `const PRIMER_NUMERO = 16000` | sí |
+| La patente se guarda normalizada | `normalizarPatente = v => v.toUpperCase().replace(/[\s.-]/g,'')` | sí |
+| Todo presupuesto deja al menos una fila | `if(!filas.length) filas.push([...izq,'','',...der])` | sí |
+| Máximo histórico que nunca retrocede | `maxEmitido`, y al restaurar sube con `Math.max` | sí |
 
-**Por qué importa.** La spec fue escrita contra otra versión, y las tres decisiones del plan que
-dependen de esa lectura (RF-017, RF-018 y el manejo de la fila de mano de obra) no se sostienen.
-Ver H13, H14 y H15.
+**El hallazgo real.** El archivo que Luciano subió **no es el publicado**: arranca en 16001, exporta
+12 columnas, no normaliza la patente, guarda `{guardados, proximo}` y no tiene ninguna de las
+protecciones de numeración. Es una variante más simple.
 
-**De paso, dos cosas mejoran.** Que la herramienta no normalice la patente confirma que D3 y la
-enmienda H3 estaban bien puestas: la base es el único lugar donde la normalización ocurre de
-verdad. Y que las protecciones de numeración no existan refuerza el argumento de RF-021: hoy el
-riesgo de números duplicados entre equipos es mayor de lo que la spec creía.
+**Por qué importa igual.** Si esa variante corre en algún equipo del taller, sus datos se comportan
+distinto: numeración que puede volver a 16001 sin avisar, patentes sin normalizar, y un CSV que la
+importación no va a poder leer con el mismo parser. Conviene confirmar que nadie la esté usando.
 
-**Pendiente de confirmar.** Si el archivo entregado es el mismo que está publicado, o si la
-versión publicada es la que la spec describe. Cambia qué CSV va a llegar de verdad.
-
----
-
-### H13 — RF-018 no se puede implementar como está: el CSV no trae `modificado_en`
-
-**Qué pasa.** El plan resuelve la idempotencia así: *"Un trabajo existente se actualiza sólo si
-el `modificado_en` del archivo es posterior al guardado; si es igual o anterior, se saltea."* Esa
-columna no existe en el CSV, y el objeto guardado tampoco la tiene. No hay ningún dato de tiempo
-en el archivo: ni por presupuesto, ni de la exportación.
-
-**Caso real.** Dos equipos con historiales distintos. No hay forma de saber cuál exportó más
-tarde, ni si el 16043 de un archivo es más nuevo que el que ya está en la base.
-
-**Toca.** RF-018, T014, y la sección "Importación del CSV" del plan.
-
-**Opciones.**
-
-1. **La importación inserta lo que falta y nunca pisa lo que ya está** (recomendada). Si el
-   número ya existe en la base, no se toca; se informa que vino distinto, para que alguien mire.
-   Cumple RF-018 al pie de la letra —reimportar no crea nada nuevo— y no puede perder una
-   corrección hecha en la base, que es justo lo que la regla de `modificado_en` intentaba
-   proteger. También hace que importar el archivo de un segundo equipo sea seguro: agrega lo que
-   falta y nada más.
-2. **Gana el último import.** Reimportar reemplaza. Simple, pero un CSV viejo pisa una corrección
-   nueva sin avisar — el riesgo que el plan quería evitar, ahora sin defensa.
-3. **Agregar `modificado_en` a la herramienta.** Corrige el origen, pero no sirve para el
-   histórico ya cargado, que es justamente lo que hay que importar.
+**Lección de método.** La spec citaba el commit exacto de la fuente. Había que leer eso antes de
+tratar como autoritativo un archivo suelto, y no al revés.
 
 ---
 
-### H14 — Un presupuesto puede desaparecer del CSV
+### H13 — La regla de idempotencia de RF-018 · RESUELTO, con el motivo corregido
 
-**Qué pasa.** `exportarCSV` emite una fila por renglón, y una extra de mano de obra **sólo si
-`monto_mano_obra` no es cero**. Un presupuesto sin renglones y con mano de obra en cero no emite
-ninguna fila. Y guardarlo está permitido: `guardarYPdf` sólo exige cliente **o** renglones.
+**Cómo se registró primero, y por qué estaba mal.** Anoté que RF-018 no se podía implementar porque
+el CSV no traía `modificado_en`. **Sí lo trae** — la columna existe en el publicado y en el CSV real.
+La conclusión salió de la variante equivocada.
 
-Verificado ejecutando la función real: un presupuesto con cliente y sin importes no aparece en la
-salida.
+**Qué queda.** Luciano eligió que la importación **agregue lo que falta y nunca pise lo que ya está**.
+La decisión se sostiene por sus propios méritos, aunque el motivo que le di era falso:
 
-**Caso real.** Alguien abre un presupuesto, carga el nombre del cliente, guarda para reservar el
-número, y no vuelve a tocarlo. Ese número existe en el historial del navegador y no existe en el
-CSV. Al importar, queda un hueco — y como la serie puede tener huecos legítimamente (RF-020),
-nadie se entera de que faltó uno.
+- Ninguna actualización automática puede distinguir una corrección deliberada hecha en la base de un
+  dato viejo que vuelve. No pisar es lo único que no puede perder datos en silencio.
+- Es exactamente lo que hace la herramienta al restaurar un CSV:
+  `const nuevos = r.presupuestos.filter(p => !hay.has(p.numero))`.
+- Y como `modificado_en` sí existe, el informe de diferencias puede además decir cuál versión es más
+  nueva, sin que eso dispare ninguna escritura.
 
-**Toca.** RF-017, RF-018, criterio de aceptación 6 ("el CSV se importa completo").
-
-**Opciones.**
-
-1. **Aceptarlo y detectarlo.** La importación no puede recuperar lo que no está en el archivo,
-   pero sí puede reportar los huecos de la serie para que se revisen a mano contra el navegador.
-2. **Arreglar la herramienta** para que emita siempre al menos una fila por presupuesto. Corrige
-   el problema de acá en adelante; para el histórico ya guardado sirve, porque la exportación se
-   hace después del arreglo. **Es la única opción que recupera esos presupuestos.**
+La alternativa descartada —actualizar cuando el archivo es más nuevo— es implementable. Se descarta
+por decisión, no por imposibilidad.
 
 ---
 
-### H15 — La fila "Mano de obra" no se distingue como dice la spec
+### H14 — "Un presupuesto puede desaparecer del CSV" · RETIRADO, no existe
 
-**Qué pasa.** La spec dice: *"al leerla hay que descartarla por la columna `monto_mano_obra` y no
-por ese texto — un repuesto podría llamarse igual"*. Pero en el CSV real **todas** las filas del
-presupuesto llevan `subtotal_repuestos`, `monto_mano_obra` y `monto_total` repetidos. Esa columna
-no distingue nada.
+**No aplica.** El publicado ya emite una fila vacía cuando un presupuesto no tiene ni renglones ni
+mano de obra:
 
-Y el caso que la spec temía es peor de lo que suponía: un repuesto llamado "Mano de obra" por el
-mismo importe que la mano de obra produce **dos filas byte a byte idénticas**. Verificado:
-
-```
-16004;...;Mano de obra;7000;7000;7000;14000
-16004;...;Mano de obra;7000;7000;7000;14000
+```js
+if(!filas.length) filas.push([...izq, '', '', ...der]);
 ```
 
-**La regla que sí funciona**, derivada del generador y no de suponer: dentro de cada número, en el
-orden del archivo, si `monto_mano_obra` es distinto de cero entonces **la última fila del grupo**
-es la de mano de obra y se descarta; el resto son renglones. Si es cero, todas son renglones.
+La spec lo decía correctamente ("todo presupuesto deja al menos una fila, incluso sin conceptos"). El
+agujero existía sólo en la variante que no está publicada.
 
-Se verifica sola: después de descartar, la suma de los renglones tiene que dar
-`subtotal_repuestos`. Si no da, la fila se reporta por número de línea, como pide el plan para
-T012. Exige que el staging conserve el orden del archivo — el `linea` que el plan ya previó.
+**El parche que se había preparado para la página queda retirado y no debe aplicarse:** agregaría una
+segunda fila vacía a presupuestos que ya emiten una.
 
-Con esa regla, los cuatro casos de prueba salen bien, incluido el de las dos filas idénticas.
+---
+
+### H15 — Cómo se identifica la fila de mano de obra · RESUELTO
+
+**Lo que sigue siendo cierto.** Ni la columna sola ni el texto solo alcanzan. `monto_mano_obra` se
+repite en todas las filas del presupuesto, así que no distingue nada; y un repuesto puede llamarse
+"Mano de obra" con el mismo importe, con lo que las dos filas quedan idénticas.
+
+**La regla, tomada del lector de la propia herramienta** en vez de inventada — para que no existan dos
+lecturas distintas del mismo archivo:
+
+```js
+if(p.monto_mano_obra){
+  for(let i = resto.length - 1; i >= 0; i--){
+    if(T(resto[i][7]) === 'Mano de obra' && aNum(resto[i][COL_IMPORTE]) === p.monto_mano_obra){
+      resto.splice(i, 1);
+      break;
+    }
+  }
+}
+```
+
+De atrás hacia adelante, se descarta **una sola** fila: la primera cuyo detalle sea exactamente
+"Mano de obra" y cuyo importe coincida con `monto_mano_obra`. Después se descartan los renglones sin
+detalle y sin importe. Como control, la suma de los renglones restantes tiene que dar
+`subtotal_repuestos`.
 
 ---
 
