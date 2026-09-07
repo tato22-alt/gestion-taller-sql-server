@@ -269,17 +269,34 @@ Tres pasos, sin lógica de negocio escondida en un trigger.
    sobre `Trabajos` por `numero_presupuesto`, y los conceptos se reemplazan por completo — se borran los
    del trabajo y se insertan los del archivo, en orden.
 
-**Idempotencia (RF-018).** Reimportar el mismo archivo no crea nada nuevo: el upsert empareja por
-número. Un trabajo existente se actualiza sólo si el `modificado_en` del archivo es posterior al
-guardado; si es igual o anterior, se saltea. Así un CSV viejo no pisa una corrección más nueva.
+**Idempotencia (RF-018, enmendada por H13).** Reimportar el mismo archivo no crea nada nuevo: se
+empareja por número. Si el número **ya existe en la base, no se toca** — y si el archivo traía algo
+distinto, se informa por número de línea para que alguien lo mire.
+
+La regla original comparaba el `modificado_en` del archivo contra el guardado. No se puede: el CSV
+real no trae ningún dato de tiempo, ni por presupuesto ni de la exportación (H12, H13). Sin forma de
+ordenar dos versiones, no pisar es la única regla que no puede perder en silencio una corrección hecha
+en la base — que es exactamente lo que la regla de `modificado_en` intentaba proteger. Y hace seguro
+importar el archivo de un segundo equipo: agrega lo que falta y nada más.
 
 **Lo que la importación nunca toca:** `no_concretado` y `origen`. No vienen en el archivo, y sobrescribir
 con un valor por defecto lo que alguien cargó en la base sería pérdida silenciosa de datos.
 
 **Los totales del archivo se ignoran.** Se recalculan desde los renglones, igual que hace la herramienta.
 
-**La fila «Mano de obra»** se identifica por la columna `monto_mano_obra` y no por el texto del detalle,
-porque un repuesto podría llamarse igual.
+**La fila «Mano de obra»** (regla corregida por H15). No se puede identificar por la columna
+`monto_mano_obra`: en el CSV real esa columna se repite en **todas** las filas del presupuesto, así
+que no distingue nada. Tampoco por el texto, porque un repuesto puede llamarse igual — y si además
+lleva el mismo importe, las dos filas salen byte a byte idénticas.
+
+La regla exacta, derivada del generador: dentro de cada número, **en el orden del archivo**, si
+`monto_mano_obra` es distinto de cero entonces la **última fila del grupo** es la de mano de obra y se
+descarta; si es cero, todas son renglones. Después se descartan los renglones sin detalle y sin
+importe, igual que hace la herramienta al leer su propio formulario.
+
+Se verifica sola: la suma de los renglones que quedan tiene que dar `subtotal_repuestos`. Si no da, se
+reporta por número de línea. Esto exige que el staging conserve el orden del archivo — para eso está
+`linea`.
 
 ---
 
