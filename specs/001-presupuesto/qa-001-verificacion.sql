@@ -39,6 +39,8 @@ declare
   v_cli   integer;
   v_veh   integer;
   v_tra   integer;
+  v_seq_valor  bigint;
+  v_seq_usada  boolean;
 begin
   -- ---------------- limpieza previa ----------------
   delete from trabajos  where numero_presupuesto between 99990000 and 99999999;
@@ -620,11 +622,122 @@ begin
   end;
   return next;
 
+  -- =====================================================================
+  bloque := 'numeración';
+  -- =====================================================================
+  --
+  -- CUIDADO: estas verificaciones piden números de verdad, y nextval no se deshace. Sin
+  -- restaurar, correr el QA sobre la base real dejaría el contador donde lo dejó la prueba
+  -- y el próximo presupuesto saldría con un número absurdo. Se guarda el estado acá y se
+  -- restaura en la limpieza final; la verificación de cierre comprueba que se restauró.
+  select last_value, is_called into v_seq_valor, v_seq_usada from seq_numero_presupuesto;
+
+  nro := nro + 1; ref := 'RF-101'; que_verifica := 'La serie arranca en 16000 sobre una base vacía';
+  begin
+    select last_value::integer, is_called into v_int, v_bool from seq_numero_presupuesto;
+    -- is_called=false significa que nadie pidió todavía: el próximo será last_value.
+    estado := case when (v_bool = false and v_int = 16000) or (v_bool and v_int >= 16000)
+                   then 'PASA' else 'FALLA' end;
+    obs := case when v_bool then 'ya se entregaron números; el contador va en ' || v_int
+                else 'sin usar; el primero será ' || v_int end;
+  exception when others then
+    estado := 'FALLA'; obs := sqlerrm;
+  end;
+  return next;
+
+  nro := nro + 1; ref := 'RF-102 / RF-103'; que_verifica := 'Dos pedidos seguidos dan números distintos y crecientes';
+  begin
+    select fn_proximo_numero_presupuesto() into v_int;
+    select fn_proximo_numero_presupuesto() into v_num;
+    estado := case when v_num > v_int then 'PASA' else 'FALLA' end;
+    obs := 'entregó ' || v_int || ' y después ' || v_num;
+  exception when others then
+    estado := 'FALLA'; obs := sqlerrm;
+  end;
+  return next;
+
+  nro := nro + 1; ref := 'RF-103 / RF-020'; que_verifica := 'Un número pedido queda gastado aunque la transacción se caiga';
+  begin
+    -- Se pide un número dentro de un bloque que después falla a propósito.
+    begin
+      select fn_proximo_numero_presupuesto() into v_int;
+      raise exception 'se deshace a propósito';
+    exception when others then
+      null;
+    end;
+    -- Si nextval se hubiera deshecho, el próximo repetiría el número anterior.
+    select fn_proximo_numero_presupuesto() into v_num;
+    estado := case when v_num > v_int then 'PASA' else 'FALLA' end;
+    obs := case when v_num > v_int
+                then 'el ' || v_int || ' quedó quemado; siguió en ' || v_num || ' (el hueco es correcto)'
+                else 'el número volvió a entregarse: la serie puede duplicar' end;
+  exception when others then
+    estado := 'FALLA'; obs := sqlerrm;
+  end;
+  return next;
+
+  nro := nro + 1; ref := 'RF-105'; que_verifica := 'El contador detecta y corrige quedarse atrás';
+  begin
+    insert into trabajos (numero_presupuesto, origen_carga, txt_cliente)
+      values (99991000, 'manual', 'ZZQA numeracion');   -- entra por fuera de la secuencia
+    select fn_sincronizar_numeracion() into v_int;
+    select fn_proximo_numero_presupuesto() into v_num;
+    estado := case when v_num > 99991000 then 'PASA' else 'FALLA' end;
+    obs := 'tras sincronizar, el próximo fue ' || v_num || ' (mayor que el 99991000 cargado a mano)';
+  exception when others then
+    estado := 'FALLA'; obs := sqlerrm;
+  end;
+  return next;
+
+  nro := nro + 1; ref := 'RF-104'; que_verifica := 'Sincronizar nunca hace retroceder el contador';
+  begin
+    select last_value::integer into v_int from seq_numero_presupuesto;
+    delete from trabajos where numero_presupuesto = 99991000;  -- desaparece el número alto
+    perform fn_sincronizar_numeracion();
+    select last_value::integer into v_num from seq_numero_presupuesto;
+    estado := case when v_num >= v_int then 'PASA' else 'FALLA' end;
+    obs := 'estaba en ' || v_int || ', quedó en ' || v_num || ' (nunca baja)';
+  exception when others then
+    estado := 'FALLA'; obs := sqlerrm;
+  end;
+  return next;
+
+  nro := nro + 1; ref := 'D8 / RF-101'; que_verifica := 'anon no puede pedir números';
+  begin
+    set local role anon;
+    perform fn_proximo_numero_presupuesto();
+    reset role;
+    estado := 'FALLA'; obs := 'anon quemó un número de la serie';
+  exception when insufficient_privilege then
+    reset role; estado := 'PASA'; obs := 'permission denied (42501)';
+  when others then
+    reset role; estado := 'FALLA'; obs := 'error inesperado: ' || sqlerrm;
+  end;
+  return next;
+
   -- ---------------- limpieza final ----------------
+  -- El contador de numeración vuelve exactamente donde estaba: el QA no puede gastar
+  -- números reales. is_called se restaura también, para que una serie sin estrenar siga
+  -- entregando 16000 como primer número.
+  perform setval('seq_numero_presupuesto', v_seq_valor, v_seq_usada);
+
   delete from trabajos  where numero_presupuesto between 99990000 and 99999999;
   delete from trabajos  where txt_cliente like 'ZZQA%';
   delete from vehiculos where patente like 'ZZQA%';
   delete from clientes  where nombre  like 'ZZQA%';
+
+  nro := nro + 1; bloque := 'cierre'; ref := 'RF-101 / RF-104';
+  que_verifica := 'El QA devolvió el contador de numeración donde estaba';
+  begin
+    select last_value, is_called into v_int, v_bool from seq_numero_presupuesto;
+    estado := case when v_int = v_seq_valor and v_bool = v_seq_usada then 'PASA' else 'FALLA' end;
+    obs := case when v_int = v_seq_valor and v_bool = v_seq_usada
+                then 'intacto: el próximo número real sigue siendo el que correspondía'
+                else 'el QA gastó números reales: estaba en ' || v_seq_valor || ', quedó en ' || v_int end;
+  exception when others then
+    estado := 'FALLA'; obs := sqlerrm;
+  end;
+  return next;
 
   nro := nro + 1; bloque := 'cierre'; ref := 'H9';
   que_verifica := 'La base quedó sin datos de prueba del QA';
