@@ -17,6 +17,7 @@
 -- un bloque con EXCEPTION, así que se deshacen solas.
 --
 -- ESTADOS: PASA · FALLA · ABIERTO (hallazgo conocido, esperando decisión del dueño).
+-- Estado esperado hoy: todo PASA. Un ABIERTO o un FALLA es algo para mirar.
 
 create or replace function fn_qa_001_presupuesto()
 returns table (
@@ -459,41 +460,91 @@ begin
   return next;
 
   -- =====================================================================
-  bloque := 'hallazgos abiertos';
+  bloque := 'enmiendas';
   -- =====================================================================
 
-  nro := nro + 1; ref := 'H1'; que_verifica := 'Buscar sin tilde encuentra un nombre con tilde';
+  nro := nro + 1; ref := 'H1 / RF-009'; que_verifica := 'Buscar sin tilde encuentra un nombre con tilde';
   begin
     insert into clientes (nombre) values ('ZZQA Peréz Acentuado');
-    select count(*) into v_int from clientes c where c.nombre ilike '%zzqa perez%';
-    estado := case when v_int > 0 then 'PASA' else 'ABIERTO' end;
-    obs := case when v_int > 0 then 'la busqueda ignora acentos'
-                else 'ILIKE no ignora acentos: 0 resultados. Ver qa-hallazgos.md H1' end;
+    select count(*) into v_int from clientes c
+     where c.nombre_norm like '%' || fn_normalizar_nombre('zzqa perez') || '%';
+    estado := case when v_int > 0 then 'PASA' else 'FALLA' end;
+    obs := case when v_int > 0 then 'buscando "zzqa perez" encuentra "ZZQA Peréz Acentuado"'
+                else 'la búsqueda sigue sin ignorar acentos' end;
   exception when others then
     estado := 'FALLA'; obs := sqlerrm;
   end;
   return next;
 
-  nro := nro + 1; ref := 'H3'; que_verifica := 'La validación de patente acepta texto crudo (minúsculas)';
-  v_bool := fn_es_formato_patente_valido('aar222');
-  estado := case when v_bool then 'PASA' else 'ABIERTO' end;
-  obs := case when v_bool then 'normaliza internamente'
-              else 'devuelve false con la patente cruda. Ver H3 — pendiente de decisión' end;
+  nro := nro + 1; ref := 'H1 / H6'; que_verifica := 'La vista expone cliente_norm para buscar con el índice';
+  begin
+    select count(*) into v_int from information_schema.columns
+     where table_schema='public' and table_name='vw_presupuestos' and column_name='cliente_norm';
+    estado := case when v_int=1 then 'PASA' else 'FALLA' end;
+    obs := case when v_int=1 then 'consulta e índice hablan de la misma columna'
+                else 'falta cliente_norm: el índice de búsqueda queda muerto (H6)' end;
+  exception when others then
+    estado := 'FALLA'; obs := sqlerrm;
+  end;
   return next;
 
-  nro := nro + 1; ref := 'H5'; que_verifica := 'Un número borrado NO se puede reusar (RF-020)';
+  nro := nro + 1; ref := 'H3 / RF-022'; que_verifica := 'La validación de patente acepta texto crudo';
+  -- La misma patente escrita de cualquier manera tiene que dar el mismo veredicto.
+  -- 'aa 123-bb' normaliza a AA123BB, que es Mercosur válido: espera true, no false.
+  v_bool := fn_es_formato_patente_valido('aar222')            -- viejo, en minúscula
+        and fn_es_formato_patente_valido('aa 123-bb')         -- Mercosur con separadores
+        and fn_es_formato_patente_valido('  AAR222  ')        -- con espacios alrededor
+        and fn_es_formato_patente_valido('AA.123.BB')         -- con puntos
+        and fn_es_formato_patente_valido('x1') = false        -- basura, sigue siendo basura
+        and fn_es_formato_patente_valido('aaaa1111') = false;
+  estado := case when v_bool then 'PASA' else 'FALLA' end;
+  obs := 'aar222=' || fn_es_formato_patente_valido('aar222')
+      || ' "aa 123-bb"=' || fn_es_formato_patente_valido('aa 123-bb')
+      || ' x1=' || fn_es_formato_patente_valido('x1');
+  return next;
+
+  nro := nro + 1; ref := 'H3 / principio V'; que_verifica := 'patente_norm coincide con fn_normalizar_patente';
+  begin
+    select count(*) into v_int from vehiculos v
+     where v.patente_norm is distinct from fn_normalizar_patente(v.patente);
+    estado := case when v_int=0 then 'PASA' else 'FALLA' end;
+    obs := case when v_int=0 then 'las dos normalizaciones no divergieron'
+                else v_int || ' vehículos donde difieren' end;
+  exception when others then
+    estado := 'FALLA'; obs := sqlerrm;
+  end;
+  return next;
+
+  nro := nro + 1; ref := 'H5 / RF-023 / D9'; que_verifica := 'authenticated NO puede borrar un trabajo';
   begin
     insert into trabajos (numero_presupuesto, origen_carga, txt_cliente)
-      values (99990040,'manual','ZZQA reuso');
+      values (99990040,'manual','ZZQA no se borra');
+    set local role authenticated;
     delete from trabajos t where t.numero_presupuesto = 99990040;
-    insert into trabajos (numero_presupuesto, origen_carga, txt_cliente)
-      values (99990040,'manual','ZZQA reuso otra vez');
-    estado := 'ABIERTO';
-    obs := 'el número volvió a estar libre tras borrarlo. Ver H5 — pendiente de decisión';
-  exception when unique_violation then
-    estado := 'PASA'; obs := 'el número quedó reservado para siempre';
+    reset role;
+    estado := 'FALLA'; obs := 'la aplicación pudo borrar un registro histórico';
+  exception when insufficient_privilege then
+    reset role; estado := 'PASA';
+    obs := 'permission denied: el número queda reservado para siempre (RF-020)';
   when others then
-    estado := 'FALLA'; obs := sqlerrm;
+    reset role; estado := 'FALLA'; obs := 'error inesperado: ' || sqlerrm;
+  end;
+  return next;
+
+  nro := nro + 1; ref := 'RF-016 / D9'; que_verifica := 'authenticated SÍ puede corregir un trabajo y sus conceptos';
+  begin
+    insert into trabajos (numero_presupuesto, origen_carga, txt_cliente, monto_mano_obra)
+      values (99990041,'manual','ZZQA corregible', 100) returning id_trabajo into v_tra;
+    insert into trabajo_items (id_trabajo, orden, detalle, importe)
+      values (v_tra, 0, 'ZZQA a corregir', 1);
+    set local role authenticated;
+    update trabajos t set monto_mano_obra = 200 where t.id_trabajo = v_tra;
+    delete from trabajo_items ti where ti.id_trabajo = v_tra;
+    reset role;
+    estado := 'PASA'; obs := 'corregir es UPDATE, y los conceptos sí se pueden reemplazar';
+  exception when others then
+    reset role; estado := 'FALLA';
+    obs := 'no se puede corregir un presupuesto: ' || sqlerrm;
   end;
   return next;
 

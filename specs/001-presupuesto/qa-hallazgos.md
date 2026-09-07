@@ -50,7 +50,7 @@ En local se corrió tres veces seguidas con idéntico resultado y dejando la bas
 
 ## Hallazgos
 
-### H1 — La búsqueda por nombre no encuentra nombres con tilde
+### H1 — La búsqueda por nombre no encuentra nombres con tilde · RESUELTO
 
 **Qué pasa.** La pregunta 3 de la spec devuelve vacío buscando `perez` cuando el cliente es
 `Juan Pérez`. `ILIKE` es insensible a mayúsculas, no a acentos.
@@ -99,7 +99,7 @@ que se vuelve a comprobar en cada corrida y no depende de que alguien se acuerde
 
 ---
 
-### H3 — La validación de patente da falso negativo si le llega la patente cruda
+### H3 — La validación de patente da falso negativo si le llega la patente cruda · RESUELTO
 
 **Qué pasa.** `fn_es_formato_patente_valido` espera la patente ya normalizada. Con `aar222`
 en minúscula devuelve `false`. Lo descubrimos probando: pasó exactamente eso.
@@ -150,7 +150,7 @@ acá. Queda como advertencia para quien construya la app, no como tarea de este 
 
 ---
 
-### H5 — RF-020 no está garantizado: un número borrado se puede reusar
+### H5 — RF-020 no está garantizado: un número borrado se puede reusar · RESUELTO
 
 **Qué pasa.** RF-020 dice que un número emitido no se reutiliza nunca, "ni siquiera si el
 presupuesto se borra". El índice único sólo impide dos filas simultáneas con el mismo número.
@@ -175,7 +175,7 @@ Nota: el número **16043 ya está quemado** por los datos de prueba (ver H9).
 
 ---
 
-### H6 — El índice de búsqueda de clientes no lo usa ninguna consulta
+### H6 — El índice de búsqueda de clientes no lo usa ninguna consulta · RESUELTO
 
 **Qué pasa.** T002 creó un índice de trigramas sobre `clientes.nombre_norm`. La consulta de
 la pregunta 3 filtra por `vw_presupuestos.cliente_actual`, que es `clientes.nombre` — otra
@@ -265,6 +265,40 @@ esconder nada.
 
 **Regla que queda:** ninguna verificación de este repositorio se hace con sentencias sueltas
 en un bloque. Se agrega como verificación a la función de QA, y se corre entera.
+
+---
+
+### H11 — Normalizar sin acentos sirve para buscar, pero es peligroso para deduplicar
+
+**Qué pasa.** La enmienda H1 hace que `nombre_norm` ignore acentos. `unaccent` también convierte
+`Ñ` en `N`, así que `MARÍA ÑANDÚ` queda como `MARIA NANDU`. Para **buscar** es lo que se quería.
+El problema es el otro uso de esa misma columna.
+
+**Caso real.** D5 dice que la importación resuelve el cliente **por nombre normalizado**, y crea
+uno nuevo si no lo encuentra. Con la normalización sin acentos, `Peña` y `Pena` pasan a ser el
+mismo nombre — y son dos apellidos distintos, los dos comunes. La importación los fusionaría en
+un solo cliente, en silencio.
+
+Eso choca de frente con el razonamiento que el propio D5 dejó escrito: *"Duplicar y unir a mano
+de a uno es reversible; fusionar de más, no."* Es el mismo argumento por el que se decidió no
+unificar por teléfono.
+
+Del otro lado: `Pérez` y `Perez` casi siempre **son** la misma persona escrita de dos maneras, y
+ahí la normalización sin acentos ayuda. O sea que la misma regla mejora un caso y empeora el otro.
+
+**Toca.** D5, T013 (consolidación de la importación), RF-019. No afecta a nada de lo que está
+corrido hoy: sólo importa cuando se construya la importación, en el bloque D.
+
+**Opciones.**
+
+1. **Dos normalizaciones, cada una para lo suyo** (recomendada). `nombre_norm` sin acentos sigue
+   siendo la de **buscar**. La importación coteja con una forma más estricta —mayúsculas y
+   espacios, pero respetando acentos y la Ñ— de modo que ante la duda duplica en vez de fusionar,
+   que es la dirección reversible. Cuesta una función más, `fn_cotejar_nombre`, y ninguna columna.
+2. **Una sola normalización.** La importación coteja por `nombre_norm`. Más simple, y unifica
+   bien los `Pérez`/`Perez`. Acepta que algún `Peña`/`Pena` se fusione mal, sin vuelta atrás.
+
+**Sin decidir todavía.** No bloquea nada hasta T013.
 
 ---
 
