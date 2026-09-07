@@ -279,8 +279,28 @@ feature. Quedan como están hasta que su feature las rediseñe o las elimine.
 - **La clave anónima queda pública** en el repositorio del presupuesto. Mitigado por D8, pero depende de
   que ninguna tabla futura nazca sin RLS. Conviene verificarlo en cada migración.
 
+## Proyecto de Supabase
+
+| Dato | Valor |
+|---|---|
+| URL | `https://osslhkvdclrbukjqwpnt.supabase.co` |
+| Identificador | `osslhkvdclrbukjqwpnt` |
+| Clave publishable | `sb_publishable_MV1IZ770uuRM2bUmZqmuWA_mdicKzXw` |
+| Registro público | desactivado |
+| Usuarios | dados de alta a mano |
+
+La clave publishable es la que Supabase llamaba `anon`. Es pública por diseño y va en el
+repositorio de la página; lo que protege los datos es RLS, no el secreto de la clave (D8).
+La clave `secret` no existe en este proyecto y no debe crearse para la página.
+
+El registro público está desactivado a propósito: con la clave publicada, cualquiera podría
+crearse una cuenta y quedar como usuario autenticado. Los usuarios se dan de alta a mano.
+
+**Las migraciones no se pueden correr desde este repositorio.** No hay salida de red hacia
+Supabase, así que cada migración se ejecuta pegándola en el editor SQL del panel y el
+resultado se reporta a mano. El criterio de terminación de cada tarea sigue siendo que corra,
+no que esté escrita.
+
 ## Pendiente antes de implementar
 
-- Crear el proyecto de Supabase y decidir la región.
-- Dar de alta los usuarios que van a cargar: vos, tu viejo y la administrativa.
 - Confirmar cómo entra el login en la página del presupuesto, que hoy no tiene ninguno.
