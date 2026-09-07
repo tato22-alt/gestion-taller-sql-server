@@ -22,6 +22,9 @@ registrar un trabajo que llegue sin presupuesto previo — un auto de compañía
 emitida, por ejemplo — y el principio IV prohíbe que el esquema impida registrar la realidad. La clave
 subrogada cuesta una columna y no cierra ninguna puerta.
 
+Confirmado por Luciano: el número sigue siendo por el que se identifica un arreglo, pero no es la
+clave primaria.
+
 ### D2 — El total no se almacena
 
 `monto_total` y `subtotal_repuestos` no son columnas: salen de una vista que suma los conceptos y le
@@ -73,6 +76,11 @@ deliberado: RF-019 dice que la importación acepta el pasado como está y no es 
 limpiarlo. Fusionar clientes es una operación posterior y manual, y hay que preverla como trabajo real.
 
 Un presupuesto sin nombre de cliente entra con `id_cliente` nulo. Sin patente, con `id_vehiculo` nulo.
+
+Confirmado por Luciano: la importación **no** intenta unificar por teléfono. Unificar por teléfono
+fusionaría a dos personas que comparten una línea —hermanos, matrimonio, el teléfono del taller
+anotado por comodidad— y una fusión equivocada no se desarma. Duplicar y unir a mano de a uno es
+reversible; fusionar de más, no. La consulta de T015 lista los parecidos para esa revisión.
 
 ### D6 — Fechas: una es local, las otras son UTC
 
