@@ -57,6 +57,10 @@ patrones, y la aplicación la usa para advertir mientras se tipea. El esquema no
 principio IV, un auto con patente rara, provisoria o mal cargada tiene que poder registrarse igual. Lo
 que sí se exige es que sea única, porque de eso depende no duplicar vehículos.
 
+**La validación normaliza antes de comparar** (enmienda H3, RF-022). Recibe la patente como la
+escribió la persona y la normaliza ella misma, porque se la llama mientras se tipea. La normalización
+vive en `fn_normalizar_patente`, una sola definición que usan la validación y quien la necesite.
+
 ### D4 — El snapshot de lo impreso vive en el trabajo
 
 `trabajos` guarda `txt_cliente`, `txt_direccion`, `txt_telefono`, `txt_vehiculo` y `txt_patente`, además
@@ -114,6 +118,25 @@ usuarios de Supabase Auth y una política única de «usuario autenticado»; no 
 No se difiere para después. Una tabla que nace sin RLS queda expuesta desde el minuto uno, y el momento
 en que alguien se acuerda suele ser tarde.
 
+### D9 — Los trabajos no se borran, y eso es lo que garantiza RF-020
+
+`authenticated` no tiene privilegio de `DELETE` sobre `trabajos`. Un presupuesto registrado es un
+registro histórico: si está mal se corrige (RF-016), y si no se concretó se marca (RF-015).
+
+Confirmado por Luciano: "no debería por qué borrar los presupuestos, son un registro histórico".
+
+Con esto RF-020 —un número emitido no se reutiliza nunca— deja de necesitar una estructura propia. El
+índice único impide dos filas con el mismo número, y como ninguna fila desaparece, ningún número
+vuelve a quedar libre. La alternativa que se descartó era una tabla de números emitidos: una
+estructura más que mantener para garantizar lo mismo que garantiza no borrar.
+
+No contradice el principio IV. Ese principio prohíbe que el esquema impida **registrar** un hecho que
+ocurrió; acá se impide **borrar** uno que ya se registró, que es lo contrario.
+
+`trabajo_items` sí se puede borrar: corregir la lista de conceptos es parte de RF-016, y la
+importación los reemplaza por completo. Y el `ON DELETE CASCADE` se conserva, porque quien tenga
+acceso al panel sigue pudiendo borrar un trabajo, y en ese caso sus conceptos no deben quedar sueltos.
+
 ---
 
 ## Esquema
@@ -124,7 +147,7 @@ en que alguien se acuerda suele ser tarde.
 |---|---|---|---|
 | `id_cliente` | `INT GEN. IDENTITY` | no | PK |
 | `nombre` | `TEXT` | no | único dato exigido (RF-013) |
-| `nombre_norm` | `GENERATED ... STORED` | no | mayúsculas, recortado, para buscar y deduplicar |
+| `nombre_norm` | `GENERATED ... STORED` | no | `fn_normalizar_nombre`: mayúsculas, recortado, **sin acentos** (H1) |
 | `telefono` | `TEXT` | sí | |
 | `direccion` | `TEXT` | sí | |
 | `email` | `TEXT` | sí | no lo captura el presupuesto; queda para la app |
@@ -133,6 +156,12 @@ en que alguien se acuerda suele ser tarde.
 
 Sin restricción única sobre el nombre: dos clientes pueden llamarse igual. Índice no único sobre
 `nombre_norm` para búsqueda por parte del nombre.
+
+`unaccent` no es inmutable de por sí, así que no se puede usar directo en una columna generada. Se
+envuelve en `fn_unaccent_inmutable`, y sobre eso se apoya `fn_normalizar_nombre`, que es la única
+definición de "normalizar un nombre" del modelo: la usa la columna generada **y** quien busque, para
+que el término buscado se normalice igual que lo guardado (enmienda H1, y con eso queda resuelto H6:
+la consulta y el índice pasan a hablar de la misma columna).
 
 ### `vehiculos`
 
@@ -270,7 +299,7 @@ feature. Quedan como están hasta que su feature las rediseñe o las elimine.
 | VI — ningún automatismo financiero | Cero triggers. La importación es una función que alguien invoca. |
 | VII, VIII — deuda y saldo | No aplican: este feature no toca dinero adeudado. |
 | IX — alcance | No se crea ninguna tabla de la lista prohibida. |
-| Alcance v3.0.0 — políticas de acceso | D8: RLS en todas las tablas desde la migración inicial. |
+| Alcance v3.0.0 — políticas de acceso | D8: RLS en todas las tablas desde la migración inicial. D9: sin `DELETE` sobre `trabajos`. |
 | X — la spec precede | Este plan deriva de la spec y no agrega requisitos nuevos. |
 
 ---

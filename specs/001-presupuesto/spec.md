@@ -72,6 +72,13 @@ a la base sin volver a tipearlos.
 - **RF-020** — Un número emitido no se reutiliza nunca, ni siquiera si el presupuesto se borra. La serie
   puede tener huecos, y eso es correcto: la alternativa es arriesgarse a que dos presupuestos distintos
   lleven el mismo número.
+- **RF-023** — Un presupuesto registrado **no se borra**: es un registro histórico. Si está mal, se
+  corrige y conserva su número (RF-016); si no se concretó, se marca (RF-015). Con esto la garantía de
+  RF-020 se sostiene sola: un número deja de estar en uso sólo si su fila desaparece, y su fila no
+  desaparece. *(Enmienda H5, confirmada por Luciano: "no debería por qué borrar los presupuestos, son
+  un registro histórico". Los conceptos de un presupuesto sí se pueden borrar — corregir una lista es
+  parte de RF-016, y la importación los reemplaza por completo.)*
+
 - **RF-021** — La base es la autoridad de la numeración. La herramienta actual reparte números por
   dispositivo porque no tiene con qué hacerlo mejor; cuando se conecte, el número lo entrega la base.
 
@@ -91,7 +98,9 @@ a la base sin volver a tipearlos.
 ### Cliente y vehículo
 
 - **RF-009** — La base guarda cliente y vehículo como entidades propias, para poder responder por
-  patente y por cliente, y para no volver a pedir lo que ya está.
+  patente y por cliente, y para no volver a pedir lo que ya está. La búsqueda por nombre ignora
+  mayúsculas **y acentos**: buscar `perez` encuentra `Pérez`. *(Enmienda H1: quien busca desde un
+  teléfono no escribe las tildes, y no encontrar al cliente hace que lo carguen de nuevo.)*
 - **RF-010** — El presupuesto conserva además **el texto tal como se imprimió**: nombre, dirección,
   teléfono y descripción del vehículo. Si mañana se corrige el nombre del cliente en su ficha, el
   presupuesto ya emitido sigue diciendo lo que decía el papel.
@@ -101,7 +110,10 @@ a la base sin volver a tipearlos.
 - **RF-022** — Conviven dos formatos de patente: el anterior a 2016 (`AAR222`, tres letras y tres
   dígitos) y el Mercosur (`AA000AA`, dos letras, tres dígitos y dos letras). El sistema tiene que
   reconocer ambos y advertir cuando una patente no encaja en ninguno — pero sin impedir guardarla, por
-  el principio IV.
+  el principio IV. **Normalizar es parte de reconocer**: `aa 123-bb`, `AA123BB` y `AA-123-BB` son la
+  misma patente válida, y quien valida no puede exigir que se la den ya normalizada. *(Enmienda H3: la
+  validación se usa mientras alguien tipea, o sea sobre texto crudo; una advertencia que salta siempre
+  es una advertencia que nadie mira.)*
 - **RF-012** — Un vehículo puede tener presupuestos de clientes distintos a lo largo del tiempo. El
   cliente del presupuesto es el de ese presupuesto; el vehículo recuerda el último conocido sólo para
   poder proponerlo.
