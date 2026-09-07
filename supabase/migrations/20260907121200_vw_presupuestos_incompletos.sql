@@ -16,7 +16,7 @@
 -- qué les falta. La aplicación decide qué hacer con eso (principio III). Y por el principio I,
 -- esto es una vista, no una columna de estado.
 
-create view vw_presupuestos_incompletos
+create or replace view vw_presupuestos_incompletos
 with (security_invoker = true)
 as
 select *

@@ -48,17 +48,35 @@ comment on function fn_normalizar_nombre(text) is
 -- Postgres no deja cambiar la expresión de una columna generada: hay que rehacerla.
 -- Al borrarla se va también su índice, que se recrea abajo. Las políticas de RLS y los
 -- permisos son de la tabla, no de la columna, así que no se tocan (lo verifica el QA).
-alter table clientes drop column nombre_norm;
-
-alter table clientes
-  add column nombre_norm text
-  generated always as (fn_normalizar_nombre(nombre)) stored;
+--
+-- Va dentro de un guard para que la migración se pueda correr dos veces sin romper: si ya
+-- está aplicada, no hace nada. Sin esto, la segunda corrida falla con "cannot drop column
+-- nombre_norm because other objects depend on it" — la vista que esta misma migración crea
+-- más abajo pasa a depender de la columna. Estas migraciones se pegan a mano en el panel y
+-- no hay forma de saber a simple vista si una ya se aplicó: tienen que ser repetibles.
+do $migracion$
+begin
+  if not exists (
+    select 1
+    from pg_attrdef ad
+    join pg_attribute a on a.attrelid = ad.adrelid and a.attnum = ad.adnum
+    where ad.adrelid = 'clientes'::regclass
+      and a.attname = 'nombre_norm'
+      and pg_get_expr(ad.adbin, ad.adrelid) like '%fn_normalizar_nombre%'
+  ) then
+    alter table clientes drop column if exists nombre_norm;
+    alter table clientes
+      add column nombre_norm text
+      generated always as (fn_normalizar_nombre(nombre)) stored;
+  end if;
+end
+$migracion$;
 
 comment on column clientes.nombre_norm is
   'fn_normalizar_nombre(nombre): mayúsculas, sin acentos, recortado. Para buscar y para '
   'deduplicar (T015). La mantiene el motor, nunca se escribe a mano.';
 
-create index ix_clientes_nombre_norm_trgm
+create index if not exists ix_clientes_nombre_norm_trgm
   on clientes using gin (nombre_norm gin_trgm_ops);
 
 -- La vista expone la forma normalizada, para que la búsqueda por nombre use el índice.
