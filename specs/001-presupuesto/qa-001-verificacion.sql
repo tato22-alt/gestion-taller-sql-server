@@ -702,6 +702,29 @@ begin
   end;
   return next;
 
+  nro := nro + 1; ref := 'RF-101 / RF-105'; que_verifica := 'Sincronizar sobre una serie sin estrenar no quema el 16000';
+  begin
+    -- Caso borde: la secuencia ya está adelantada y todavía sin estrenar. Sincronizar no
+    -- debe tocarla — un setval acá la marcaría como usada, y sobre una base nueva eso
+    -- significa que el primer presupuesto real saldría 16001 en vez de 16000. Es lo que
+    -- rompería una versión "más simple" de fn_sincronizar_numeracion, escrita sin la
+    -- condición que decide cuándo corresponde adelantar.
+    --
+    -- Se prueba moviendo sólo la secuencia, nunca borrando trabajos: sobre la base real
+    -- esas filas son presupuestos de verdad. La secuencia se restaura en la limpieza final.
+    select coalesce(max(numero_presupuesto), 15999) + 1000 into v_int from trabajos;
+    perform setval('seq_numero_presupuesto', v_int, false);
+    perform fn_sincronizar_numeracion();
+    select last_value, is_called into v_num, v_bool from seq_numero_presupuesto;
+    estado := case when v_num = v_int and v_bool = false then 'PASA' else 'FALLA' end;
+    obs := case when v_num = v_int and v_bool = false
+                then 'intacta en ' || v_int || ': no se estrenó de más'
+                else 'quedó en ' || v_num || ' (usada: ' || v_bool || '): se quemó un número' end;
+  exception when others then
+    estado := 'FALLA'; obs := sqlerrm;
+  end;
+  return next;
+
   nro := nro + 1; ref := 'D8 / RF-101'; que_verifica := 'anon no puede pedir números';
   begin
     set local role anon;
