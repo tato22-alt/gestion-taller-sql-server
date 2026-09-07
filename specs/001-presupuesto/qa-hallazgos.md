@@ -33,8 +33,18 @@ Corrido y verificado en Supabase, a mano, desde el editor SQL:
 
 Esa tabla es el registro de la verificación **manual**, que resultó no ser confiable (ver H10).
 La verificación que vale hoy es `qa-001-verificacion.sql`: 41 comprobaciones en una sola
-consulta. Última corrida sobre PostgreSQL 16 con las nueve migraciones aplicadas desde cero:
-**38 PASA, 3 ABIERTO, 0 FALLA**, repetible y sin dejar filas.
+consulta.
+
+| Corrida | Entorno | Resultado |
+|---|---|---|
+| Local | PostgreSQL 16, las nueve migraciones desde cero sobre base vacía, roles de Supabase replicados | 38 PASA · 3 ABIERTO · 0 FALLA |
+| Supabase | Proyecto real `osslhkvdclrbukjqwpnt` | 38 PASA · 3 ABIERTO · 0 FALLA |
+
+Las dos corridas coinciden verificación por verificación. Las únicas diferencias son de datos
+(`id_cliente` asignado, cantidad de presupuestos leídos), porque la base real tiene las filas
+de prueba de T002–T010 que el QA no toca. Los 3 ABIERTO son H1, H3 y H5.
+
+En local se corrió tres veces seguidas con idéntico resultado y dejando la base en cero filas.
 
 ---
 
@@ -124,11 +134,19 @@ un vehículo creados, sin presupuesto. Nadie lo ve nunca, y el próximo presupue
 
 **Opciones.**
 
-1. **Dejarlo** y aceptar que la app haga las tres llamadas, con la basura ocasional.
+1. **Dejarlo, y es de la aplicación.** La constitución dice que este repositorio *no* es
+   responsable de "reglas de proceso, interfaz, orquestación ni presentación". Resolver el
+   orden de tres inserts es orquestación. El riesgo es real, pero atajarlo acá sería meter
+   alcance que la constitución sacó a propósito.
 2. **Una función RPC** (`fn_registrar_presupuesto`) que reciba todo y lo inserte en una sola
-   transacción. Supabase la expone como endpoint. No es lógica de negocio escondida en un
-   trigger (principio VI): es una operación que alguien invoca explícitamente. Sería una
-   tarea nueva del plan, no está en `tasks.md`.
+   transacción. Supabase la expone como endpoint. No sería un automatismo prohibido por el
+   principio VI (alguien la invoca, no se dispara sola), pero sí sería orquestación dentro de
+   la base.
+
+**Corrección de este hallazgo.** Al escribirlo recomendé la opción 2 sin haber contrastado
+contra el alcance declarado en la constitución. Contrastado, la opción 1 es la que respeta el
+reparto de responsabilidades del proyecto: el hueco existe, pero se tapa en la aplicación, no
+acá. Queda como advertencia para quien construya la app, no como tarea de este repositorio.
 
 ---
 
@@ -204,8 +222,15 @@ marca esto como riesgo abierto ("conviene verificarlo en cada migración") pero 
 
 **Toca.** Proceso, no esquema. La restricción de que no hay salida de red viene del entorno.
 
-**Opciones.** Una tabla `migraciones_aplicadas` que cada migración escribe al final; o llevar
-el registro fuera de la base, a mano, en el repo. La primera es autoverificable y cuesta poco.
+**Cubierto en parte, después de escribir esto.** `qa-001-verificacion.sql` responde la
+pregunta que de verdad importa: no *qué migraciones corrieron*, sino *si el esquema es el que
+debería ser*. Sus trece verificaciones de estructura detectan una migración salteada — una
+tabla sin RLS, un índice que falta, un privilegio que quedó — en una sola consulta.
+
+**Lo que sigue abierto.** Saber en qué punto de la serie está la base si alguna vez hay que
+retomarla a ciegas. Opciones: una tabla `migraciones_aplicadas` que cada migración escribe al
+final, o adoptar la CLI de Supabase cuando haya red. Recomendación: no agregar la tabla —
+correr el QA cuesta menos y dice más.
 
 ---
 
