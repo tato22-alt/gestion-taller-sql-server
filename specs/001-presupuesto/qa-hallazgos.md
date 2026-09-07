@@ -281,7 +281,7 @@ en un bloque. Se agrega como verificación a la función de QA, y se corre enter
 
 ---
 
-### H11 — Normalizar sin acentos sirve para buscar, pero es peligroso para deduplicar · ABIERTO
+### H11 — Normalizar sin acentos sirve para buscar, pero es peligroso para deduplicar · RESUELTO
 
 **Qué pasa.** La enmienda H1 hace que `nombre_norm` ignore acentos. `unaccent` también convierte
 `Ñ` en `N`, así que `MARÍA ÑANDÚ` queda como `MARIA NANDU`. Para **buscar** es lo que se quería.
@@ -311,7 +311,119 @@ corrido hoy: sólo importa cuando se construya la importación, en el bloque D.
 2. **Una sola normalización.** La importación coteja por `nombre_norm`. Más simple, y unifica
    bien los `Pérez`/`Perez`. Acepta que algún `Peña`/`Pena` se fusione mal, sin vuelta atrás.
 
-**Sin decidir todavía.** No bloquea nada hasta T013.
+**Decidido por Luciano: "si peña y pena es lo mismo".** Se coteja con `nombre_norm`, la misma
+normalización sin acentos que usa la búsqueda. `Peña` y `Pena` se unifican, igual que `Pérez` y
+`Perez`. No hace falta una segunda función de cotejo. Se acepta que dos apellidos distintos que
+sólo difieren en la eñe queden fusionados; a cambio, los mismos clientes escritos de dos maneras
+—que es el caso frecuente— dejan de duplicarse.
+
+---
+
+### H12 — La spec describe una versión de la herramienta que no es la actual
+
+**Qué pasa.** Luciano entregó el HTML de la herramienta en uso ("este es el presupuesto online
+hoy"). No coincide con la sección "Estructura real de la fuente" de la spec, que dice estar
+verificada sobre `tato22-alt/semaforo-presupuesto @ 178fb1d`.
+
+| La spec dice | El archivo entregado hace |
+|---|---|
+| CSV de **14 columnas**, con `creado_en` y `modificado_en` | CSV de **12 columnas**; esas dos no existen |
+| `{ version: 2, inicializado: true, maxEmitido, guardados }` | `{ guardados, proximo }` — sin `version`, sin `inicializado`, sin `maxEmitido` |
+| El primero de la serie es **16000** | `PRIMER_NUMERO = 16001` |
+| La patente se guarda "normalizada a mayúsculas sin espacios, guiones ni puntos" | Sólo `.trim()`; se guarda como se tipeó |
+| "máximo histórico que nunca retrocede, bloqueo de una segunda pestaña, negativa a guardar si el historial está dañado" | Ninguna de las tres existe. `Guardado.leer()` atrapa cualquier error y devuelve `null`, y ahí `proximo` vuelve a 16001 en silencio |
+
+**Por qué importa.** La spec fue escrita contra otra versión, y las tres decisiones del plan que
+dependen de esa lectura (RF-017, RF-018 y el manejo de la fila de mano de obra) no se sostienen.
+Ver H13, H14 y H15.
+
+**De paso, dos cosas mejoran.** Que la herramienta no normalice la patente confirma que D3 y la
+enmienda H3 estaban bien puestas: la base es el único lugar donde la normalización ocurre de
+verdad. Y que las protecciones de numeración no existan refuerza el argumento de RF-021: hoy el
+riesgo de números duplicados entre equipos es mayor de lo que la spec creía.
+
+**Pendiente de confirmar.** Si el archivo entregado es el mismo que está publicado, o si la
+versión publicada es la que la spec describe. Cambia qué CSV va a llegar de verdad.
+
+---
+
+### H13 — RF-018 no se puede implementar como está: el CSV no trae `modificado_en`
+
+**Qué pasa.** El plan resuelve la idempotencia así: *"Un trabajo existente se actualiza sólo si
+el `modificado_en` del archivo es posterior al guardado; si es igual o anterior, se saltea."* Esa
+columna no existe en el CSV, y el objeto guardado tampoco la tiene. No hay ningún dato de tiempo
+en el archivo: ni por presupuesto, ni de la exportación.
+
+**Caso real.** Dos equipos con historiales distintos. No hay forma de saber cuál exportó más
+tarde, ni si el 16043 de un archivo es más nuevo que el que ya está en la base.
+
+**Toca.** RF-018, T014, y la sección "Importación del CSV" del plan.
+
+**Opciones.**
+
+1. **La importación inserta lo que falta y nunca pisa lo que ya está** (recomendada). Si el
+   número ya existe en la base, no se toca; se informa que vino distinto, para que alguien mire.
+   Cumple RF-018 al pie de la letra —reimportar no crea nada nuevo— y no puede perder una
+   corrección hecha en la base, que es justo lo que la regla de `modificado_en` intentaba
+   proteger. También hace que importar el archivo de un segundo equipo sea seguro: agrega lo que
+   falta y nada más.
+2. **Gana el último import.** Reimportar reemplaza. Simple, pero un CSV viejo pisa una corrección
+   nueva sin avisar — el riesgo que el plan quería evitar, ahora sin defensa.
+3. **Agregar `modificado_en` a la herramienta.** Corrige el origen, pero no sirve para el
+   histórico ya cargado, que es justamente lo que hay que importar.
+
+---
+
+### H14 — Un presupuesto puede desaparecer del CSV
+
+**Qué pasa.** `exportarCSV` emite una fila por renglón, y una extra de mano de obra **sólo si
+`monto_mano_obra` no es cero**. Un presupuesto sin renglones y con mano de obra en cero no emite
+ninguna fila. Y guardarlo está permitido: `guardarYPdf` sólo exige cliente **o** renglones.
+
+Verificado ejecutando la función real: un presupuesto con cliente y sin importes no aparece en la
+salida.
+
+**Caso real.** Alguien abre un presupuesto, carga el nombre del cliente, guarda para reservar el
+número, y no vuelve a tocarlo. Ese número existe en el historial del navegador y no existe en el
+CSV. Al importar, queda un hueco — y como la serie puede tener huecos legítimamente (RF-020),
+nadie se entera de que faltó uno.
+
+**Toca.** RF-017, RF-018, criterio de aceptación 6 ("el CSV se importa completo").
+
+**Opciones.**
+
+1. **Aceptarlo y detectarlo.** La importación no puede recuperar lo que no está en el archivo,
+   pero sí puede reportar los huecos de la serie para que se revisen a mano contra el navegador.
+2. **Arreglar la herramienta** para que emita siempre al menos una fila por presupuesto. Corrige
+   el problema de acá en adelante; para el histórico ya guardado sirve, porque la exportación se
+   hace después del arreglo. **Es la única opción que recupera esos presupuestos.**
+
+---
+
+### H15 — La fila "Mano de obra" no se distingue como dice la spec
+
+**Qué pasa.** La spec dice: *"al leerla hay que descartarla por la columna `monto_mano_obra` y no
+por ese texto — un repuesto podría llamarse igual"*. Pero en el CSV real **todas** las filas del
+presupuesto llevan `subtotal_repuestos`, `monto_mano_obra` y `monto_total` repetidos. Esa columna
+no distingue nada.
+
+Y el caso que la spec temía es peor de lo que suponía: un repuesto llamado "Mano de obra" por el
+mismo importe que la mano de obra produce **dos filas byte a byte idénticas**. Verificado:
+
+```
+16004;...;Mano de obra;7000;7000;7000;14000
+16004;...;Mano de obra;7000;7000;7000;14000
+```
+
+**La regla que sí funciona**, derivada del generador y no de suponer: dentro de cada número, en el
+orden del archivo, si `monto_mano_obra` es distinto de cero entonces **la última fila del grupo**
+es la de mano de obra y se descarta; el resto son renglones. Si es cero, todas son renglones.
+
+Se verifica sola: después de descartar, la suma de los renglones tiene que dar
+`subtotal_repuestos`. Si no da, la fila se reporta por número de línea, como pide el plan para
+T012. Exige que el staging conserve el orden del archivo — el `linea` que el plan ya previó.
+
+Con esa regla, los cuatro casos de prueba salen bien, incluido el de las dos filas idénticas.
 
 ---
 
