@@ -548,6 +548,78 @@ begin
   end;
   return next;
 
+  nro := nro + 1; ref := 'RF-024 / H7'; que_verifica := 'La vista de incompletos existe y anon no la ve';
+  begin
+    select count(*) into v_int from information_schema.views
+     where table_schema='public' and table_name='vw_presupuestos_incompletos';
+    v_bool := has_table_privilege('anon','vw_presupuestos_incompletos','select');
+    estado := case when v_int=1 and v_bool=false then 'PASA' else 'FALLA' end;
+    obs := case when v_int<>1 then 'no existe la vista'
+                when v_bool then 'anon puede leerla' else 'presente, anon sin privilegios' end;
+  exception when others then
+    estado := 'FALLA'; obs := sqlerrm;
+  end;
+  return next;
+
+  nro := nro + 1; ref := 'RF-024'; que_verifica := 'Detecta qué le falta a un presupuesto incompleto';
+  begin
+    -- Sin fecha, sin dirección, sin teléfono y con mano de obra en cero. Cliente sí tiene.
+    insert into clientes (nombre) values ('ZZQA Incompleto') returning id_cliente into v_cli;
+    insert into trabajos (numero_presupuesto, origen_carga, id_cliente, txt_cliente, monto_mano_obra)
+      values (99990050,'manual', v_cli, 'ZZQA Incompleto', 0) returning id_trabajo into v_tra;
+    select array_to_string(vi.faltantes, ',') into v_txt
+      from vw_presupuestos_incompletos vi where vi.id_trabajo = v_tra;
+    estado := case when v_txt = 'fecha,direccion,telefono,mano_obra' then 'PASA' else 'FALLA' end;
+    obs := 'esperado "fecha,direccion,telefono,mano_obra", obtenido "' || coalesce(v_txt,'(no aparece)') || '"';
+  exception when others then
+    estado := 'FALLA'; obs := sqlerrm;
+  end;
+  return next;
+
+  nro := nro + 1; ref := 'RF-024'; que_verifica := 'Un presupuesto completo NO aparece como incompleto';
+  begin
+    insert into clientes (nombre, direccion, telefono)
+      values ('ZZQA Completo', 'ZZQA Calle 123', '11-5555-5555') returning id_cliente into v_cli;
+    insert into trabajos (numero_presupuesto, origen_carga, id_cliente, txt_cliente,
+                          txt_direccion, txt_telefono, fecha_presupuesto, monto_mano_obra)
+      values (99990051,'manual', v_cli, 'ZZQA Completo', 'ZZQA Calle 123', '11-5555-5555',
+              current_date, 5000) returning id_trabajo into v_tra;
+    select count(*) into v_int from vw_presupuestos_incompletos vi where vi.id_trabajo = v_tra;
+    estado := case when v_int=0 then 'PASA' else 'FALLA' end;
+    obs := case when v_int=0 then 'sin repuestos y sin vehículo, pero completo igual (RF-024)'
+                else 'aparece como incompleto y no debería' end;
+  exception when others then
+    estado := 'FALLA'; obs := sqlerrm;
+  end;
+  return next;
+
+  nro := nro + 1; ref := 'RF-024'; que_verifica := 'Faltar repuestos NO hace incompleto a un presupuesto';
+  begin
+    select count(*) into v_int
+      from vw_presupuestos_incompletos vi
+     where vi.id_trabajo = v_tra and 'repuestos' = any(vi.faltantes);
+    select count(*) into v_num from trabajo_items ti where ti.id_trabajo = v_tra;
+    estado := case when v_int=0 and v_num=0 then 'PASA' else 'FALLA' end;
+    obs := 'el trabajo tiene ' || v_num || ' repuestos y no lo marca incompleto por eso';
+  exception when others then
+    estado := 'FALLA'; obs := sqlerrm;
+  end;
+  return next;
+
+  nro := nro + 1; ref := 'H7 / pregunta 7'; que_verifica := 'El corte mensual no descarta los presupuestos sin fecha';
+  begin
+    select count(*) into v_int from (
+      select date_trunc('month', vp.fecha_presupuesto)::date as mes, count(*) as c
+      from vw_presupuestos vp group by 1
+    ) q where q.mes is null;
+    estado := case when v_int=1 then 'PASA' else 'FALLA' end;
+    obs := case when v_int=1 then 'los sin fecha salen en una fila aparte, no desaparecen'
+                else 'no hay fila para los sin fecha' end;
+  exception when others then
+    estado := 'FALLA'; obs := sqlerrm;
+  end;
+  return next;
+
   -- ---------------- limpieza final ----------------
   delete from trabajos  where numero_presupuesto between 99990000 and 99999999;
   delete from trabajos  where txt_cliente like 'ZZQA%';

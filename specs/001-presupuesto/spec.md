@@ -92,8 +92,17 @@ a la base sin volver a tipearlos.
   por tipo: el detalle lo escribe quien presupuesta.
 - **RF-007** — El total es la suma de los conceptos más la mano de obra. Es el total final que paga el
   cliente; no se le suma nada después.
-- **RF-008** — Todos los campos descriptivos pueden faltar. Un presupuesto con sólo importes es
-  registrable, igual que hoy en el talonario.
+- **RF-008** — Todos los campos descriptivos pueden faltar **en el esquema**. Un presupuesto con
+  sólo importes es registrable, igual que hoy en el talonario. Esto es lo que la base permite; lo
+  que la carga exige es otra cosa, y es RF-024.
+
+- **RF-024** — Un presupuesto **cargado hoy** está completo sólo si tiene fecha, cliente con
+  nombre, dirección y teléfono, y mano de obra mayor a cero. Los **repuestos son opcionales**: hay
+  trabajos que son sólo mano de obra. El vehículo tampoco es exigible. Esa regla la aplica quien
+  carga, no el esquema (RF-008, RF-019, principio IV), pero **la base tiene que poder decir cuáles
+  están incompletos y qué les falta**, para poder revisarlos. *(Enmienda H7, confirmada por
+  Luciano: "mano de obra y los datos no pueden faltar, lo que a veces no se necesita son
+  repuestos".)*
 
 ### Cliente y vehículo
 

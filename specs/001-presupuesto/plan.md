@@ -242,6 +242,16 @@ Responde las preguntas 1, 2, 3, 5, 6 y 7 de la spec. La 4 —último número y p
 `MAX(numero_presupuesto)`, pero **no como el próximo a emitir**: RF-020 prohíbe reutilizar y la serie
 puede tener huecos, así que la asignación se resuelve en el feature que conecte la herramienta, no acá.
 
+`vw_presupuestos_incompletos` — una fila por presupuesto al que le falta algo de lo que RF-024
+exige al cargar: fecha, cliente con nombre, dirección y teléfono, mano de obra mayor a cero. Los
+repuestos no cuentan (un trabajo puede ser sólo mano de obra) y el vehículo tampoco. Devuelve
+`faltantes`, la lista de qué falta.
+
+Es la respuesta correcta a la regla de RF-024 según el principio I: lo que se puede derivar es una
+vista, nunca una columna de estado. Y según el principio III entrega el hecho —a este presupuesto
+le falta el teléfono— sin decidir qué hacer con él: si eso se avisa, se bloquea o se ignora lo
+resuelve la aplicación.
+
 No se crea ninguna vista de color, prioridad ni alerta: principio III, eso lo decide la aplicación.
 
 ---

@@ -192,7 +192,7 @@ la normalización cambia igual.
 
 ---
 
-### H7 — La pregunta 7 deja afuera los presupuestos sin fecha
+### H7 — La pregunta 7 deja afuera los presupuestos sin fecha · RESUELTO
 
 **Qué pasa.** La consulta mensual filtra `where fecha_presupuesto is not null`. RF-008 dice
 que la fecha puede faltar.
@@ -202,8 +202,17 @@ algunos no tienen fecha y desaparecen del conteo sin avisar.
 
 **Toca.** Pregunta 7, RF-008.
 
-**Opciones.** Dejarlo (y documentar que el corte mensual sólo cuenta los fechados), o devolver
-una fila aparte para los sin fecha. Es decisión de negocio, no técnica.
+**Resuelto, y más grande de lo que parecía.** Luciano: *"mano de obra y los datos no pueden
+faltar, lo que a veces no se necesita son repuestos"*. Eso es una regla de carga, no una
+restricción del esquema: hacerla `NOT NULL` dejaría afuera el histórico incompleto (RF-019) y
+empujaría a que alguien escriba `xx` con tal de guardar (principio IV). Quedó así:
+
+- **RF-024** (nuevo): un presupuesto cargado hoy está completo si tiene fecha, cliente con
+  nombre, dirección y teléfono, y mano de obra mayor a cero. Repuestos y vehículo, no.
+- La exige **la aplicación**; la base la reporta con `vw_presupuestos_incompletos`, que devuelve
+  qué le falta a cada uno. Vista, no columna — principio I.
+- El corte mensual ya no descarta los sin fecha: salen en una fila aparte, con el mes en nulo,
+  para que se vean y se corrijan.
 
 **Aparte, menor:** `date_trunc('month', fecha_presupuesto)` devuelve `timestamptz`
 (`2026-09-01 00:00:00+00`), no una fecha. Invita justo a la confusión que D6 quiere evitar.

@@ -54,11 +54,14 @@ where no_concretado = true
 order by fecha_presupuesto desc nulls last;
 
 -- 7. ¿Cuántos presupuestos se hicieron en un mes y por qué monto total?
+-- Los que no tienen fecha NO se descartan: salen en una fila aparte, con mes en nulo, para que
+-- se vean y se corrijan (enmienda H7 — RF-024 dice que la fecha no debería faltar, y lo que no
+-- se ve no se arregla). El ::date evita devolver un timestamptz, que invitaría justo a la
+-- confusión que D6 quiere evitar.
 select
-  date_trunc('month', fecha_presupuesto) as mes,
-  count(*)                               as cantidad_presupuestos,
-  sum(monto_total)                       as monto_total_del_mes
+  date_trunc('month', fecha_presupuesto)::date as mes,
+  count(*)                                     as cantidad_presupuestos,
+  sum(monto_total)                             as monto_total_del_mes
 from vw_presupuestos
-where fecha_presupuesto is not null
 group by 1
-order by 1;
+order by 1 nulls last;
