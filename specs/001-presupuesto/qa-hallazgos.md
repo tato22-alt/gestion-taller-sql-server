@@ -1,6 +1,6 @@
 # Hallazgos de verificación 001 — Presupuesto
 
-**Estado:** pendiente de decisión del dueño del negocio
+**Estado:** los hallazgos de los bloques A, B y C están cerrados. Queda abierto H11, que se decide en el bloque D.
 **Origen:** pase de verificación tras implementar los bloques A, B y C (T001–T010)
 **Spec:** `spec.md` · **Plan:** `plan.md` · **Constitución:** v3.0.0
 
@@ -40,13 +40,10 @@ consulta.
 | Local, base vacía | PostgreSQL 16, las trece migraciones desde cero, roles de Supabase replicados | **49 PASA · 0 FALLA** |
 | Local, base poblada | Migraciones 1–9 + datos equivalentes a los reales, después las cuatro enmiendas | **49 PASA · 0 FALLA** |
 | Local, doble pasada | Las trece migraciones aplicadas dos veces seguidas | **49 PASA · 0 FALLA** |
-| Supabase | Proyecto real `osslhkvdclrbukjqwpnt` | 47 PASA · 2 FALLA en la última corrida completa |
+| **Supabase** | Proyecto real `osslhkvdclrbukjqwpnt`, las trece migraciones aplicadas | **49 PASA · 0 FALLA** |
 
-**Sobre las 2 FALLA en Supabase:** eran las verificaciones 40 y 41, y su causa era que la
-migración `h3` todavía no se había ejecutado. `h3` se aplicó después, y su comportamiento se
-verificó directamente (`aar222` → true, `aa 123-bb` → true, `x1` → false). Queda **inferido**,
-no medido, que una corrida completa hoy daría 49/49: falta correr el QA entero una última vez
-sobre Supabase para cerrar el registro con una medición y no con una deducción.
+Las cuatro corridas coinciden verificación por verificación. Nada quedó inferido: el 49/49 sobre
+la base real está medido.
 
 En local se corrió tres veces seguidas con idéntico resultado y dejando la base en cero filas.
 
