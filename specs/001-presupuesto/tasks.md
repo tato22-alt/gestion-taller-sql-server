@@ -9,28 +9,34 @@ está verificada.
 
 ## Bloque A — Esquema
 
-| # | Tarea | Depende | Termina cuando |
-|---|---|---|---|
-| T001 | Migración inicial: extensiones, convenciones de nombres y `updated_at` | — | La migración corre limpia sobre una base vacía |
-| T002 | Tabla `clientes` con `nombre_norm` generada e índice de búsqueda | T001 | Se inserta un cliente sólo con nombre (RF-013) |
-| T003 | Tabla `vehiculos` con `patente_norm` generada y única | T001 | `aa 123-bb` y `AA123BB` colisionan como la misma patente |
-| T004 | Función de validación de formato de patente, no bloqueante | T003 | Reconoce `AAR222` y `AA000AA`; una patente rara se guarda igual (RF-022) |
-| T005 | Tabla `trabajos`: snapshot, `numero_presupuesto` único parcial, `origen` nulo | T002, T003 | Entra un trabajo sin cliente, sin patente y sin origen (RF-008, RF-014) |
-| T006 | Tabla `trabajo_items` con `orden` y cascada | T005 | Los conceptos vuelven en el orden en que se cargaron |
+**Bloque A: TERMINADO.** Corrido y verificado sobre Supabase.
+
+| # | Tarea | Estado |
+|---|---|---|
+| T001 | Migración inicial: extensiones y convenciones | ✅ |
+| T002 | Tabla `clientes` con `nombre_norm` e índice de búsqueda | ✅ |
+| T003 | Tabla `vehiculos` con `patente_norm` única | ✅ |
+| T004 | Validación de formato de patente, no bloqueante | ✅ (enmendada por H3) |
+| T005 | Tabla `trabajos` | ✅ |
+| T006 | Tabla `trabajo_items` | ✅ |
 
 ## Bloque B — Acceso
 
-| # | Tarea | Depende | Termina cuando |
-|---|---|---|---|
-| T007 | RLS en las cuatro tablas y políticas de usuario autenticado | T006 | Con la clave anónima no se lee ni se escribe nada (D8) |
-| T008 | Permisos sobre vistas y revocación al rol anónimo | T007 | Verificado con una llamada REST real usando la clave anónima |
+**Bloque B: TERMINADO.**
+
+| # | Tarea | Estado |
+|---|---|---|
+| T007 | RLS y políticas de usuario autenticado | ✅ |
+| T008 | Permisos sobre vistas y revocación al rol anónimo | ✅ — falta correr `verificar-acceso.html` para cerrarlo con la llamada REST real que el criterio pide |
 
 ## Bloque C — Derivación
 
-| # | Tarea | Depende | Termina cuando |
-|---|---|---|---|
-| T009 | Vista `vw_presupuestos` con totales derivados | T006 | El total sale de los renglones y no de ninguna columna (D2) |
-| T010 | Consultas de las siete preguntas de la spec | T009 | Cada una se responde con una sola consulta |
+**Bloque C: TERMINADO.**
+
+| # | Tarea | Estado |
+|---|---|---|
+| T009 | Vista `vw_presupuestos` con totales derivados | ✅ |
+| T010 | Consultas de las siete preguntas | ✅ (la 3 y la 7 corregidas por H1 y H7) |
 
 ## Bloque D — Importación
 
@@ -49,12 +55,22 @@ está verificada.
 
 ## Bloque E — Verificación y cierre
 
-| # | Tarea | Depende | Termina cuando |
-|---|---|---|---|
-| T016 | Datos de prueba que cubren los seis escenarios de la spec | T009 | Incluye auto nuevo, auto repetido, no concretado y presupuesto sin cliente |
-| T017 | Verificación de los siete criterios de aceptación | T010, T014, T016 | Los siete pasan y queda registrado cómo se probó cada uno |
-| T018 | Diccionario de datos actualizado | T017 | Documenta zonas horarias, campos derivados y qué no toca la importación |
-| T019 | Retirar del repositorio el modelo académico derogado | T017 | Se van `Casos`, `CasoItems.tipo`, el trigger de fecha y `sp_CambiarEstadoCaso` |
+| # | Tarea | Estado |
+|---|---|---|
+| T016 | Datos de prueba de los seis escenarios | ❌ **descartada.** El QA crea y borra sus propios datos para cada escenario, y la base quedó vacía a propósito para la primera carga real |
+| T017 | Verificación de los siete criterios | ✅ `verificacion-criterios.md` |
+| T018 | Diccionario de datos | ✅ `docs/diccionario-datos.md`, reescrito para el modelo vigente |
+| T019 | Retirar el modelo académico derogado | ✅ ver `scripts/LEGADO.md` |
+
+---
+
+## Feature 002 — Numeración
+
+| # | Tarea | Estado |
+|---|---|---|
+| T101 | Secuencia desde 16000, `fn_proximo_numero_presupuesto()` y sincronización | ✅ escrita y probada en local; **falta correrla en Supabase** |
+
+Spec en `specs/002-numeracion/spec.md`.
 
 ---
 
