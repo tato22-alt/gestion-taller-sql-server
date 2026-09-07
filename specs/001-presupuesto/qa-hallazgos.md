@@ -37,14 +37,21 @@ consulta.
 
 | Corrida | Entorno | Resultado |
 |---|---|---|
-| Local | PostgreSQL 16, las nueve migraciones desde cero sobre base vacía, roles de Supabase replicados | 38 PASA · 3 ABIERTO · 0 FALLA |
-| Supabase | Proyecto real `osslhkvdclrbukjqwpnt` | 38 PASA · 3 ABIERTO · 0 FALLA |
+| Local, base vacía | PostgreSQL 16, las trece migraciones desde cero, roles de Supabase replicados | **49 PASA · 0 FALLA** |
+| Local, base poblada | Migraciones 1–9 + datos equivalentes a los reales, después las cuatro enmiendas | **49 PASA · 0 FALLA** |
+| Local, doble pasada | Las trece migraciones aplicadas dos veces seguidas | **49 PASA · 0 FALLA** |
+| Supabase | Proyecto real `osslhkvdclrbukjqwpnt` | 47 PASA · 2 FALLA en la última corrida completa |
 
-Las dos corridas coinciden verificación por verificación. Las únicas diferencias son de datos
-(`id_cliente` asignado, cantidad de presupuestos leídos), porque la base real tiene las filas
-de prueba de T002–T010 que el QA no toca. Los 3 ABIERTO son H1, H3 y H5.
+**Sobre las 2 FALLA en Supabase:** eran las verificaciones 40 y 41, y su causa era que la
+migración `h3` todavía no se había ejecutado. `h3` se aplicó después, y su comportamiento se
+verificó directamente (`aar222` → true, `aa 123-bb` → true, `x1` → false). Queda **inferido**,
+no medido, que una corrida completa hoy daría 49/49: falta correr el QA entero una última vez
+sobre Supabase para cerrar el registro con una medición y no con una deducción.
 
 En local se corrió tres veces seguidas con idéntico resultado y dejando la base en cero filas.
+
+**Estado de los datos:** la base real quedó vacía y con los contadores de id en cero
+(`truncate ... restart identity`), lista para la primera carga real. H9 cerrado.
 
 ---
 
@@ -243,7 +250,7 @@ correr el QA cuesta menos y dice más.
 
 ---
 
-### H9 — La base tiene datos de prueba adentro
+### H9 — La base tiene datos de prueba adentro · RESUELTO
 
 **Qué pasa.** Quedaron: cliente `Juan Pérez` (id 1), vehículo `x1-rara` (id 3), trabajo
 `id_trabajo=1` con número **16043** y dos conceptos por 23000.
@@ -277,7 +284,7 @@ en un bloque. Se agrega como verificación a la función de QA, y se corre enter
 
 ---
 
-### H11 — Normalizar sin acentos sirve para buscar, pero es peligroso para deduplicar
+### H11 — Normalizar sin acentos sirve para buscar, pero es peligroso para deduplicar · ABIERTO
 
 **Qué pasa.** La enmienda H1 hace que `nombre_norm` ignore acentos. `unaccent` también convierte
 `Ñ` en `N`, así que `MARÍA ÑANDÚ` queda como `MARIA NANDU`. Para **buscar** es lo que se quería.
