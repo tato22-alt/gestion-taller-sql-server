@@ -1,25 +1,10 @@
 USE GestionTallerDB;
 GO
 
-CREATE OR ALTER PROCEDURE sp_CambiarEstadoCaso
-    @id_caso INT,
-    @nuevo_estado NVARCHAR(30)
-AS
-BEGIN
-    SET NOCOUNT ON;
-
-    IF @nuevo_estado NOT IN ('presupuestado', 'enviado', 'aprobado', 'en_taller', 'en_trabajo', 'terminado', 'entregado', 'facturado', 'cobrado')
-    BEGIN
-        RAISERROR('Estado de caso inválido.', 16, 1);
-        RETURN;
-    END;
-
-    UPDATE Casos
-    SET estado = @nuevo_estado,
-        actualizado_en = SYSDATETIME()
-    WHERE id_caso = @id_caso;
-END;
-GO
+-- DEROGADO (T019): sp_CambiarEstadoCaso. Duplicaba la lista de estados que ya estaba en
+-- el CHECK de la tabla, así que había dos definiciones del mismo dominio y ninguna
+-- mandaba sobre la otra. El estado operativo se escribe directo; no hace falta un
+-- procedimiento para eso.
 
 CREATE OR ALTER PROCEDURE sp_RegistrarCobro
     @id_caso INT,
@@ -41,11 +26,12 @@ BEGIN
     INSERT INTO Cobros (id_caso, id_factura, monto, tipo_cobro, fecha_cobro, nota)
     VALUES (@id_caso, @id_factura, @monto, @tipo_cobro, ISNULL(@fecha_cobro, CAST(GETDATE() AS DATE)), @nota);
 
-    UPDATE Casos
-    SET estado = 'cobrado',
-        actualizado_en = SYSDATETIME()
-    WHERE id_caso = @id_caso
-      AND @id_factura IS NULL;
+    -- DEROGADO (constitución v3.0.0, principio VI): acá iba un
+    --     UPDATE Casos SET estado = 'cobrado' ... WHERE @id_factura IS NULL
+    -- que marcaba el caso como cobrado ante CUALQUIER cobro sin factura, sin comparar
+    -- montos: una seña cerraba un trabajo entero. Es el ejemplo que la constitución cita
+    -- para prohibir que un automatismo escriba estados financieros. Sólo un cobro
+    -- registrado baja un saldo, y el saldo se lee de una vista.
 END;
 GO
 

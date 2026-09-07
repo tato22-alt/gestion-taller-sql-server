@@ -413,6 +413,49 @@ detalle y sin importe. Como control, la suma de los renglones restantes tiene qu
 
 ---
 
+### H16 — No hay histórico que importar: el bloque D se queda sin motivo
+
+**Qué pasa.** Luciano: *"No tenemos registro histórico, estamos migrando de presupuesto físico a
+digital."* El bloque D entero (T011–T015) existe para traer a la base los presupuestos ya cargados
+en el navegador. Si no hay ninguno, no hay nada que traer.
+
+Toda la justificación de esas cinco tareas está en la spec, y toda apunta al mismo supuesto:
+
+- **E6** — *"Los presupuestos ya cargados en el navegador tienen que poder incorporarse a la base
+  sin volver a tipearlos."*
+- **RF-017 a RF-019** — el formato del CSV, la repetibilidad, y que el pasado entre sucio como está.
+- **Criterio de aceptación 6** — *"El CSV de la herramienta actual se importa completo."*
+- El *Por qué* de la spec: *"Ese historial vive en el `localStorage` de una máquina."*
+
+Ese historial no existe. Lo que hay es un talonario de papel, y el papel no se importa: se sigue
+numerando desde donde quedó.
+
+**Propuesta: diferir, no borrar.** Cinco tareas para migrar cero filas es exactamente lo que el
+principio V manda no construir — *"si la respuesta es 'podría servir algún día', no entra"*. Pero la
+spec y el plan se conservan tal cual: si entre hoy y el momento en que la página se conecte alguien
+carga presupuestos en el navegador, esos sí van a necesitar el importador, y entonces el bloque D
+vuelve con su motivo intacto.
+
+**La consecuencia importante, y es al revés de lo que dije antes.** Yo había dicho: *"la importación
+va primero, porque si anclás la página antes, la base no sabe cuál es el último número"*. Sin
+histórico, eso se da vuelta:
+
+- Ya no hay nada que importar antes de conectar. **El bloque D deja de bloquear al feature 002.**
+- Y conectar la página pasa a ser **más urgente**, no menos: cada presupuesto que se cargue en el
+  navegador desde ahora es un presupuesto que después habrá que mover a mano — o que va a obligar a
+  construir el importador que hoy no hace falta. El histórico que hoy no existe empieza a crecer el
+  día que alguien use la herramienta sin conectar.
+
+**Un detalle concreto para el feature 002.** Con la base vacía, `max(numero_presupuesto)` es nulo.
+Quien asigne números tiene que arrancar en **16000** (RF-001, y `PRIMER_NUMERO` de la herramienta),
+no fallar ni empezar en 1. Y hay que confirmar en qué número quedó el talonario de papel: si ya pasó
+el 16000, la serie digital tiene que arrancar más arriba.
+
+**Sin decidir.** Necesita el visto bueno de Luciano antes de tocar `tasks.md`. Mientras tanto, las
+cinco tareas quedan escritas y sin empezar.
+
+---
+
 ## Lo que ya está previsto y no es hallazgo
 
 `tasks.md` ya contempla la mayor parte del QA que falta, y no hace falta inventar tareas:

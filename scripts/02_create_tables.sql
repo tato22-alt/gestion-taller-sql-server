@@ -71,10 +71,13 @@ CREATE TABLE Casos (
         FOREIGN KEY (id_perito) REFERENCES Peritos(id_perito),
 
     CONSTRAINT CK_Casos_TipoCaso
-        CHECK (tipo_caso IN ('seguro', 'particular_factura', 'efectivo')),
+        CHECK (tipo_caso IN ('seguro', 'particular_factura', 'efectivo'))
 
-    CONSTRAINT CK_Casos_Estado
-        CHECK (estado IN ('presupuestado', 'enviado', 'aprobado', 'en_taller', 'en_trabajo', 'terminado', 'entregado', 'facturado', 'cobrado'))
+    -- DEROGADO (constitución v3.0.0, principio I): CK_Casos_Estado, el enum de nueve
+    -- estados. Colapsaba tres ejes distintos —operativo, financiero y documental— en una
+    -- sola columna, y por eso no se podía consultar ninguno. Un trabajo entregado,
+    -- facturado y esperando pago era un estado real del negocio y una imposibilidad del
+    -- esquema. Reemplazado por `trabajos` en supabase/migrations/.
 );
 GO
 
@@ -82,16 +85,14 @@ CREATE TABLE CasoItems (
     id_item INT IDENTITY(1,1) PRIMARY KEY,
     id_caso INT NOT NULL,
     descripcion NVARCHAR(200) NOT NULL,
-    tipo NVARCHAR(30) NOT NULL,
+    -- DEROGADO (T019, RF-006): la columna `tipo`. Los conceptos de un presupuesto no se
+    -- clasifican: el detalle lo escribe quien presupuesta.
     cantidad DECIMAL(10,2) NOT NULL DEFAULT 1,
     precio_unitario DECIMAL(12,2) NOT NULL,
     subtotal AS (cantidad * precio_unitario) PERSISTED,
 
     CONSTRAINT FK_CasoItems_Casos
-        FOREIGN KEY (id_caso) REFERENCES Casos(id_caso) ON DELETE CASCADE,
-
-    CONSTRAINT CK_CasoItems_Tipo
-        CHECK (tipo IN ('mano_obra', 'repuesto', 'material', 'pintura', 'sublet', 'otro'))
+        FOREIGN KEY (id_caso) REFERENCES Casos(id_caso) ON DELETE CASCADE
 );
 GO
 
@@ -112,8 +113,12 @@ CREATE TABLE Facturas (
     CONSTRAINT FK_Facturas_CompaniasSeguro
         FOREIGN KEY (id_compania) REFERENCES CompaniasSeguro(id_compania),
 
+    -- DEROGADO (constitución v3.0.0, principio VI): el estado `cobrada`. Que una factura
+    -- se diga cobrada es un dato derivado —lo dice el saldo, comparando lo facturado con
+    -- lo cobrado— y un dato derivado que se almacena es uno que alguien va a olvidar de
+    -- actualizar. Se calcula al leer, no se guarda.
     CONSTRAINT CK_Facturas_Estado
-        CHECK (estado IN ('emitida', 'enviada', 'cobrada', 'anulada'))
+        CHECK (estado IN ('emitida', 'enviada', 'anulada'))
 );
 GO
 

@@ -34,6 +34,11 @@ está verificada.
 
 ## Bloque D — Importación
 
+> **EN PAUSA — ver H16.** Luciano confirmó que no hay registro histórico: el taller está pasando de
+> papel a digital, y el `localStorage` no tiene presupuestos que traer. Estas cinco tareas migran
+> cero filas. Se conservan sin empezar, porque vuelven a tener sentido si se cargan presupuestos en
+> el navegador antes de que la página se conecte a la base. **No bloquean al feature 002.**
+
 | # | Tarea | Depende | Termina cuando |
 |---|---|---|---|
 | T011 | Tabla `stg_presupuesto_csv` con las catorce columnas como texto | T001 | Un CSV entero entra crudo sin validar |
@@ -58,3 +63,8 @@ está verificada.
 Conectar la herramienta de presupuesto a la base, y con eso mover la autoridad de la numeración
 (RF-021). Es el feature 002 y necesita antes: proyecto de Supabase creado, usuarios dados de alta y
 login resuelto en la página, que hoy no tiene ninguno.
+
+**Actualización (H16).** El proyecto de Supabase ya existe y el esquema está corrido y verificado.
+Al no haber histórico, el bloque D dejó de ser un requisito previo. Lo que falta para el 002 es:
+usuarios de Supabase Auth dados de alta, login en la página, y decidir cómo se asigna el número
+—arrancando en 16000 sobre una base vacía, y confirmando en qué número quedó el talonario de papel.

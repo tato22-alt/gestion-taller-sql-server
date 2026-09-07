@@ -40,7 +40,13 @@ SELECT
 FROM Facturas f
 INNER JOIN Casos c ON f.id_caso = c.id_caso
 LEFT JOIN CompaniasSeguro cs ON f.id_compania = cs.id_compania
-WHERE f.estado <> 'cobrada'
+-- DEROGADO (constitución v3.0.0, principio VI): acá el filtro era
+--     WHERE f.estado <> 'cobrada'
+-- o sea, "pendiente de cobro" se leía de una columna de estado. Eso es exactamente lo que
+-- el principio II prohíbe: es derivable comparando lo facturado con lo cobrado, y una
+-- columna que alguien tiene que mantener al día es una que en algún momento va a mentir.
+-- En el modelo vigente sale de una vista, calculado al leer.
+WHERE f.estado <> 'anulada'
 ORDER BY f.fecha_emision DESC;
 GO
 
