@@ -35,6 +35,7 @@ declare
   v_bool  boolean;
   v_num   numeric;
   v_txt   text;
+  v_txt2  text;
   v_arr   text[];
   v_cli   integer;
   v_veh   integer;
@@ -761,6 +762,69 @@ begin
     estado := 'FALLA'; obs := sqlerrm;
   end;
   return next;
+
+  -- ---------------- feature 003: código de verificación ----------------
+  bloque := 'verificacion';
+
+  nro := nro + 1; ref := 'RF-201';
+  que_verifica := 'Un presupuesto insertado sin código igual queda con uno, y con el formato declarado';
+  insert into clientes (nombre) values ('ZZQA Codigo') returning id_cliente into v_cli;
+  insert into trabajos (numero_presupuesto, txt_cliente, origen_carga, monto_mano_obra)
+  values (99990201, 'ZZQA Codigo', 'presupuesto_web', 100)
+  returning id_trabajo, codigo_verificacion into v_tra, v_txt;
+  estado := case when v_txt ~ '^[0-9A-F]{4}-[0-9A-F]{4}$' then 'PASA' else 'FALLA' end;
+  obs := coalesce(v_txt, 'nulo');
+  return next;
+
+  nro := nro + 1; ref := 'RF-202';
+  que_verifica := 'Dos presupuestos seguidos reciben códigos distintos';
+  insert into trabajos (numero_presupuesto, txt_cliente, origen_carga, monto_mano_obra)
+  values (99990202, 'ZZQA Codigo', 'presupuesto_web', 100);
+  select count(distinct codigo_verificacion) into v_int
+    from trabajos where numero_presupuesto in (99990201, 99990202);
+  estado := case when v_int = 2 then 'PASA' else 'FALLA' end;
+  obs := v_int || ' códigos distintos sobre 2 presupuestos';
+  return next;
+
+  nro := nro + 1; ref := 'RF-203';
+  que_verifica := 'Reeditar un presupuesto NO cambia su código: el papel ya entregado sigue verificando';
+  select codigo_verificacion into v_txt2 from trabajos where id_trabajo = v_tra;  -- antes
+  update trabajos set monto_mano_obra = 555 where id_trabajo = v_tra;             -- lo que hace la app al reeditar
+  select codigo_verificacion into v_txt  from trabajos where id_trabajo = v_tra;  -- después
+  estado := case when v_txt = v_txt2 then 'PASA' else 'FALLA' end;
+  obs := case when v_txt = v_txt2 then 'intacto: ' || v_txt
+              else 'CAMBIÓ: era ' || v_txt2 || ' y quedó ' || v_txt end;
+  return next;
+
+  nro := nro + 1; ref := 'RF-202';
+  que_verifica := 'Un código con formato inválido es rechazado';
+  begin
+    update trabajos set codigo_verificacion = 'no-valido' where id_trabajo = v_tra;
+    estado := 'FALLA'; obs := 'aceptó un código fuera de formato';
+  exception when check_violation then
+    estado := 'PASA'; obs := 'rechazado por el CHECK, como corresponde';
+  end;
+  return next;
+
+  nro := nro + 1; ref := 'RF-205';
+  que_verifica := 'La verificación distingue un par (número, código) correcto de uno alterado';
+  select codigo_verificacion into v_txt from vw_presupuestos where numero_presupuesto = 99990201;
+  select (v_txt = (select codigo_verificacion from trabajos where id_trabajo = v_tra))
+     and (v_txt <> 'AAAA-BBBB') into v_bool;
+  estado := case when v_bool then 'PASA' else 'FALLA' end;
+  obs := 'la vista expone el código y no coincide con uno inventado';
+  return next;
+
+  nro := nro + 1; ref := 'RF-206';
+  que_verifica := 'El rol anónimo no puede leer el código por ningún camino';
+  select has_column_privilege('anon', 'trabajos', 'codigo_verificacion', 'select')
+      or has_table_privilege('anon', 'vw_presupuestos', 'select') into v_bool;
+  estado := case when v_bool then 'FALLA' else 'PASA' end;
+  obs := case when v_bool then 'anon LLEGA al código' else 'sin acceso, ni por la tabla ni por la vista' end;
+  return next;
+
+  delete from trabajos where numero_presupuesto in (99990201, 99990202);
+  delete from clientes where id_cliente = v_cli;
 
   nro := nro + 1; bloque := 'cierre'; ref := 'H9';
   que_verifica := 'La base quedó sin datos de prueba del QA';

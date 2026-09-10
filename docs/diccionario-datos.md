@@ -128,6 +128,7 @@ El expediente. Nace del presupuesto: presupuestar **es** crear el trabajo, no ha
 | `origen` | `text` | sí | `particular` / `siniestro`. **Nulo al nacer**: no siempre se sabe |
 | `creado_en`, `modificado_en` | `timestamptz` | no | Ver zonas horarias |
 | `origen_carga` | `text` | no | `presupuesto_web` / `manual` / `importacion`. Trazabilidad técnica |
+| `codigo_verificacion` | `text` | no | Código impreso en el presupuesto, para comprobar después que el papel es auténtico. Lo genera la base (`default`), la aplicación no lo envía. Aleatorio a propósito: si se calculara a partir del número y el total, cualquiera con la fórmula fabricaría uno válido. No cambia nunca — reeditar conserva el código, porque el papel ya entregado tiene que seguir verificando. Formato `AAAA-BBBB` en hexadecimal. Feature 003 |
 
 **Por qué el número no es la clave primaria.** Es el identificador de negocio —es el que se dicta por
 teléfono y por el que se busca— pero hacerlo PK impediría registrar un trabajo que llegue sin
@@ -186,6 +187,7 @@ Una fila por trabajo, con los totales derivados.
 | `monto_total` | `subtotal_conceptos + monto_mano_obra`. **El total final que paga el cliente** |
 | `cantidad_conceptos` | Cuántos renglones tiene |
 | `no_concretado`, `origen`, `creado_en`, `modificado_en` | Del trabajo |
+| `codigo_verificacion` | Del trabajo. Verificar es comparar este valor y el monto contra lo que dice el papel |
 
 ### `vw_presupuestos_incompletos`
 
