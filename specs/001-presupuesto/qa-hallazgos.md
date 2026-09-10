@@ -484,3 +484,52 @@ datos que hoy no existen:
 4. Decidir H4 y H8, que agregan tareas al plan.
 5. Limpiar H9 antes de cualquier dato real.
 6. Recién entonces, bloque D — y cada tarea nueva suma sus verificaciones a la función de QA.
+
+---
+
+## H17 — Las advertencias del linter de Supabase
+
+**Qué pasó.** El panel de Supabase reporta doce advertencias de seguridad sobre esta base. No
+todas son problemas, y dos de ellas describen decisiones tomadas a propósito.
+
+### Se arregla: `search_path` mutable (cinco funciones)
+
+Legítima. Sin `search_path` fijo, una función resuelve los nombres con el del que la llama;
+quien pudiera crear objetos en un esquema que se busque antes que `public` lograría que la
+función use los suyos. Acá el riesgo concreto es bajo —sólo el taller tiene sesión y `anon` no
+ejecuta nada— pero el arreglo no tiene contraindicación.
+
+Ya había precedente: `fn_normalizar_nombre` lo lleva desde H1, y de ella depende la columna
+generada `clientes.nombre_norm` sin problema. Migración `20260910130000_search_path_funciones.sql`,
+más la función del QA en su propio archivo. **Verificado: 57 PASA / 0 FALLA después del cambio.**
+
+### Se acepta: las políticas RLS son `USING (true)`
+
+El linter las marca porque en una aplicación multiusuario eso sería un agujero: cualquiera vería
+las filas de cualquiera. **Acá no hay filas de otro.** El taller es un solo inquilino; RLS existe
+para bloquear a `anon`, no para repartir filas entre usuarios (D7, D8). "Arreglarlo" exigiría
+inventar una noción de dueño de la fila que el negocio no tiene.
+
+Lo que sí importa —que `anon` no lea ni escriba nada— lo verifica el QA en cada corrida.
+
+### Se acepta: `pg_trgm` y `unaccent` viven en `public`
+
+Acá hubo que corregir una conclusión apresurada. Primero pareció que moverlas rompía la base: el
+QA caía a 56/1 con `function unaccent(unknown, text) does not exist`. Eso era un defecto de la
+prueba —el esquema nuevo se había creado sin permiso de uso para los roles—. Con los permisos que
+Supabase ya trae, **mover las extensiones funciona: 57 PASA / 0 FALLA.**
+
+Lo que sí cambia, y es la razón para no hacerlo ahora: una llamada directa a `similarity()`,
+`unaccent()` o al operador `%` **desde fuera de una función con `search_path`** deja de resolver.
+Hoy nada de eso ocurre, pero la consulta de posibles duplicados (T015, planeada) usa
+`similarity()`, y quedaría rota de una forma nada evidente.
+
+Decisión: **no se mueven.** Es una mejora opcional sobre una base en producción, el beneficio real
+es marginal en un sistema de un solo inquilino, y el costo es una trampa para el próximo que
+escriba una consulta. Si algún día se hace, se hace con el QA en la mano.
+
+### Se activa en el panel: protección de contraseñas filtradas
+
+No es SQL: es una opción de Supabase Auth que compara las contraseñas contra las bases de
+contraseñas filtradas. Gratis, sin contraindicación, y las contraseñas de los usuarios del taller
+las eligió una persona. Conviene activarla.

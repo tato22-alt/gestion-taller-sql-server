@@ -29,6 +29,7 @@ returns table (
   obs          text
 )
 language plpgsql
+set search_path = public, extensions, pg_catalog
 as $fn$
 declare
   v_int   integer;
