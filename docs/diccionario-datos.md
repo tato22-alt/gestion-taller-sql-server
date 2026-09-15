@@ -128,6 +128,8 @@ El expediente. Nace del presupuesto: presupuestar **es** crear el trabajo, no ha
 | `origen` | `text` | sí | `particular` / `siniestro`. **Nulo al nacer**: no siempre se sabe |
 | `creado_en`, `modificado_en` | `timestamptz` | no | Ver zonas horarias |
 | `origen_carga` | `text` | no | `presupuesto_web` / `manual` / `importacion`. Trazabilidad técnica |
+| `txt_chasis` | `text` | sí | Snapshot: número de chasis tal como se imprimió (D4, feature 004) |
+| `observaciones` | `text` | sí | Texto libre del presupuesto. Vacío es lo normal (feature 004) |
 
 **Por qué el número no es la clave primaria.** Es el identificador de negocio —es el que se dicta por
 teléfono y por el que se busca— pero hacerlo PK impediría registrar un trabajo que llegue sin
