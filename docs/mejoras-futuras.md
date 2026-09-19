@@ -25,7 +25,7 @@ un presupuesto no se llega a guardar.
 RLS en las cuatro tablas. El rol anónimo no tiene absolutamente nada: ni leer, ni escribir, ni pedir
 un número. De eso depende que la clave publicable pueda vivir en un repositorio público.
 
-**Verificado:** 57 comprobaciones en una sola consulta, sobre Supabase y sobre PostgreSQL local, en
+**Verificado:** 58 comprobaciones en una sola consulta, sobre Supabase y sobre PostgreSQL local, en
 base vacía y poblada. `specs/001-presupuesto/qa-001-verificacion.sql`.
 
 **Lo que todavía no existe:** deuda, cobranza, facturación, documentos, seguro, siniestro, estado

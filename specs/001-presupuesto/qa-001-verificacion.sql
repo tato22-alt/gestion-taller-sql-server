@@ -518,19 +518,47 @@ begin
   end;
   return next;
 
-  nro := nro + 1; ref := 'H5 / RF-023 / D9'; que_verifica := 'authenticated NO puede borrar un trabajo';
+  -- Enmendado por el feature 006 (RF-508). Antes esto esperaba un permission denied, porque el
+  -- delete estaba revocado entero. Ahora el delete existe y lo acota una política restrictiva —
+  -- y ahí está la diferencia que importa: una política NO levanta excepción, borra cero filas y
+  -- contesta que todo salió bien. Así que no se verifica el error: se verifica que la fila siga.
+  nro := nro + 1; ref := 'H5 / RF-023 / RF-508'; que_verifica := 'Un presupuesto EMITIDO no se borra';
   begin
     insert into trabajos (numero_presupuesto, origen_carga, txt_cliente)
       values (99990040,'manual','ZZQA no se borra');
     set local role authenticated;
-    delete from trabajos t where t.numero_presupuesto = 99990040;
+    begin
+      delete from trabajos t where t.numero_presupuesto = 99990040;
+    exception when insufficient_privilege then null;   -- también sirve: la fila queda igual
+    end;
     reset role;
-    estado := 'FALLA'; obs := 'la aplicación pudo borrar un registro histórico';
-  exception when insufficient_privilege then
-    reset role; estado := 'PASA';
-    obs := 'permission denied: el número queda reservado para siempre (RF-020)';
-  when others then
+    select count(*) into v_int from trabajos t where t.numero_presupuesto = 99990040;
+    estado := case when v_int = 1 then 'PASA' else 'FALLA' end;
+    obs := case when v_int = 1 then 'sigue ahí: el número queda reservado para siempre (RF-020)'
+                else 'la aplicación borró un registro histórico' end;
+  exception when others then
     reset role; estado := 'FALLA'; obs := 'error inesperado: ' || sqlerrm;
+  end;
+  return next;
+
+  -- RF-507: el complemento. Una fila sin número no sostiene nada de RF-020 —nunca se emitió
+  -- ninguno—, así que descartarla tiene que poder hacerse, con sus renglones.
+  nro := nro + 1; ref := 'RF-507 / feature 006'; que_verifica := 'Un PENDIENTE (sin número) sí se borra';
+  begin
+    insert into trabajos (origen_carga, txt_cliente) values ('presupuesto_web','ZZQA pendiente')
+      returning id_trabajo into v_tra;
+    insert into trabajo_items (id_trabajo, orden, detalle, importe)
+      values (v_tra, 0, 'ZZQA renglón del pendiente', 1000);
+    set local role authenticated;
+    delete from trabajos t where t.id_trabajo = v_tra;
+    reset role;
+    select count(*) into v_int from trabajos t where t.id_trabajo = v_tra;
+    select count(*) + v_int into v_int from trabajo_items ti where ti.id_trabajo = v_tra;
+    estado := case when v_int = 0 then 'PASA' else 'FALLA' end;
+    obs := case when v_int = 0 then 'se fue con sus renglones (cascade); no deja hueco en la serie'
+                else 'quedaron ' || v_int || ' filas del pendiente' end;
+  exception when others then
+    reset role; estado := 'FALLA'; obs := 'no se pudo descartar un pendiente: ' || sqlerrm;
   end;
   return next;
 
