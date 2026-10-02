@@ -60,7 +60,7 @@ está verificada.
 | T016 | Datos de prueba de los seis escenarios | ❌ **descartada.** El QA crea y borra sus propios datos para cada escenario, y la base quedó vacía a propósito para la primera carga real |
 | T017 | Verificación de los siete criterios | ✅ `verificacion-criterios.md` |
 | T018 | Diccionario de datos | ✅ `docs/diccionario-datos.md`, reescrito para el modelo vigente |
-| T019 | Retirar el modelo académico derogado | ✅ ver `scripts/LEGADO.md` |
+| T019 | Retirar el modelo académico derogado | ✅ ver `docs/legado-modelo-academico.md` |
 
 ---
 
