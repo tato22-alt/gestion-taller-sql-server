@@ -536,7 +536,7 @@ las eligió una persona. Conviene activarla.
 
 ---
 
-## H18 — Si los renglones fallan y se vuelve a apretar Guardar, nace un segundo presupuesto numerado
+## H18 — Si los renglones fallan y se vuelve a apretar Guardar, nace un segundo presupuesto numerado · RESUELTO
 
 **Qué pasa.** `guardarEnBase()` hace cinco llamadas en orden: cliente, vehículo, número,
 trabajo, renglones. Devuelve los identificadores **recién al final**, después de los renglones.
@@ -583,3 +583,23 @@ de nuevo corrige el mismo presupuesto en vez de abrir otro, y no se gasta un seg
 **Lo que sí anda y conviene no tocar.** El número se pide después del cliente y del vehículo, así
 que un error en esos pasos no gasta número. Y se pide una sola vez por trabajo, así que reeditar
 o guardar como pendiente no consume la serie. Las dos cosas están bien como están.
+
+---
+
+**RESUELTO** en el commit `6e419dc` del repositorio de la página. Se tomó la opción 2, con una
+variante: en vez de adornar cada error por separado, el tramo de los renglones queda envuelto en un
+`try` y cualquier error que salga de ahí lleva los identificadores puestos. Eso cubre también
+`sin-sesion`, que puede saltar si el token vence justo entre el trabajo y los renglones — un caso que
+la propuesta original dejaba afuera.
+
+Verificado con Chromium contra una API simulada, forzando el fallo de los renglones y volviendo a
+apretar Guardar:
+
+| | números pedidos | POST a `trabajos` | PATCH a `trabajos` | N° en pantalla |
+|---|---|---|---|---|
+| antes | 2 | 2 | 0 | `—` |
+| después | 1 | 1 | 1 | `16000` |
+
+Cuatro casos de regresión —emitir, dejar pendiente, pendiente y después emitir, emitir y guardar
+cambios— se comportan igual antes y después del cambio. El aviso ya no manda al historial: dice
+"Guardá de nuevo", porque ahora eso alcanza.
