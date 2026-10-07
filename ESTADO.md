@@ -68,10 +68,17 @@ obligatorios, guardar, reeditar, un fallo real a mitad del guardado, historial, 
 persistencia de sesión — pero **nunca contra el proyecto Supabase real desde este
 entorno**, que no tiene salida de red hacia él.
 
-**Lo que no está registrado acá:** si la cadena completa se ejercitó con un
-presupuesto real (login, pedir número, guardar, imprimir, reabrir del historial), y si
-ya salió el 16000. Cuando pase, anotarlo acá: es el único dato que convierte
-"debería funcionar" en "funciona".
+**Ejercitado con presupuestos reales.** Luciano confirmó el 2026-10-07 que la herramienta está
+en uso —en la computadora del taller y en el celular— y que el historial lista presupuestos
+desde el 16000 en adelante. El historial se arma con un `GET` a `vw_presupuestos`, así que eso
+prueba la cadena completa: login, número, trabajo, renglones y lectura posterior. El 16000
+salió. Esto es lo que convierte "debería funcionar" en "funciona".
+
+**Lo que sigue sin verificar:** si quedaron presupuestos de la versión anterior a la migración
+atrapados en el navegador. Esa versión guardaba todo en `localStorage`, bajo la clave
+`semaforo-presupuestos`, y la página de hoy no la lee. Ver el historial completo NO lo
+descarta: lo que quedó en el navegador es justamente lo que el historial no puede mostrar. Se
+comprueba en la computadora del taller, que es donde más probablemente corrió esa versión.
 
 **Dos cosas que resuelve la página, no la base:**
 
@@ -79,6 +86,10 @@ ya salió el 16000. Cuando pase, anotarlo acá: es el único dato que convierte
   quedan huérfanos. Agruparlas es orquestación, que la constitución pone fuera de este repositorio.
 - Los campos obligatorios al cargar (fecha, cliente con dirección y teléfono, mano de obra) los exige
   la página. La base los reporta con `vw_presupuestos_incompletos` pero no bloquea.
+- **H18, el único riesgo activo:** si falla el guardado de los renglones, el trabajo ya quedó escrito
+  con su número pero la página no lo sabe, y volver a apretar Guardar crea un segundo presupuesto
+  numerado — uno de ellos sin renglones y con un total que miente. El arreglo es de pocas líneas y va
+  en `index.html`. Está en `specs/001-presupuesto/qa-hallazgos.md`.
 
 ---
 
@@ -89,19 +100,23 @@ ya salió el 16000. Cuando pase, anotarlo acá: es el único dato que convierte
 | ¿Un pendiente tiene número desde que se guarda? | **No.** El número se pide recién al emitirlo. Un pendiente abandonado no puede dejar un hueco en el talonario (RF-502) |
 | ¿Se puede borrar un pendiente? | **Sí**, y sólo un pendiente. `delete` vuelve sobre `trabajos` acotado por una política restrictiva a las filas sin número (RF-507/RF-508). RF-023 sigue intacto para todo lo emitido |
 
-## Feature 007 — especificado, sin aprobar
+## Feature 007 — implementado en la página
 
-El presupuesto a medio cargar se pierde si el navegador descarta la pestaña en segundo plano, que es
-lo que pasa en el celular al cambiar de app. **No lo arregla "Dejar pendiente"**: ese botón exige un
-tap, y el bug ocurre justamente cuando nadie tocó nada.
+El presupuesto a medio cargar se perdía si el navegador descartaba la pestaña en segundo plano, que
+es lo que pasa en el celular al cambiar de app. **No lo arreglaba "Dejar pendiente"**: ese botón
+exige un tap, y el bug ocurría justamente cuando nadie tocó nada.
 
-**No toca la base.** Cero migraciones: el trabajo es todo en `index.html`. El borrador se guarda
+**Ya está resuelto**, en el commit `ed81900` del repositorio de la página. Los nueve requisitos
+—RF-701 a RF-709— están referenciados en `index.html`, así que el código dice de dónde sale cada
+decisión.
+
+**No tocó la base.** Cero migraciones: el trabajo fue todo en `index.html`. El borrador se guarda
 local porque un formulario a medio llenar todavía no es un hecho del taller, y guardar cada tecleo
 contra la base dejaría filas de basura en `trabajos`, arriba de todo en el historial.
 
-Lo técnico que resuelve el bug: el evento es `visibilitychange` pasando a `hidden`, no
-`beforeunload` — ése no se dispara cuando el sistema mata la pestaña, y es la razón por la que el
-bug existe. La spec está en `specs/007-borrador/spec.md`, con nueve requisitos y diez criterios.
+Lo técnico que lo resolvió: el evento es `visibilitychange` pasando a `hidden`, no `beforeunload`
+— ése no se dispara cuando el sistema mata la pestaña, y era la razón por la que el bug existía. La
+spec está en `specs/007-borrador/spec.md`, con nueve requisitos y diez criterios.
 
 ## Decisiones abiertas
 
@@ -136,7 +151,7 @@ specs/003-verificacion/spec.md               Código de verificación del impres
 specs/004-chasis-observaciones/spec.md       Chasis y observaciones en el presupuesto
 specs/005-detalle-mano-obra/spec.md          Qué dice el renglón de mano de obra
 specs/006-pendientes/                        Presupuestos pendientes, con su propio QA
-specs/007-borrador/spec.md                   El borrador no se pierde — SIN APROBAR
+specs/007-borrador/spec.md                   El borrador no se pierde — IMPLEMENTADO
 ```
 
 ---

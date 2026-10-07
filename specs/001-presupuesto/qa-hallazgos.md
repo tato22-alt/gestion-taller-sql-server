@@ -533,3 +533,73 @@ escriba una consulta. Si algún día se hace, se hace con el QA en la mano.
 No es SQL: es una opción de Supabase Auth que compara las contraseñas contra las bases de
 contraseñas filtradas. Gratis, sin contraindicación, y las contraseñas de los usuarios del taller
 las eligió una persona. Conviene activarla.
+
+---
+
+## H18 — Si los renglones fallan y se vuelve a apretar Guardar, nace un segundo presupuesto numerado · RESUELTO
+
+**Qué pasa.** `guardarEnBase()` hace cinco llamadas en orden: cliente, vehículo, número,
+trabajo, renglones. Devuelve los identificadores **recién al final**, después de los renglones.
+Si los renglones fallan, la función lanza, y el que llama —`guardarYPdf()`— nunca llega a
+guardarse el `id_trabajo` ni el número que la base ya emitió.
+
+El trabajo quedó escrito igual, con su número. Pero la pantalla sigue creyendo que es un
+presupuesto nuevo.
+
+**Caso real.** Se corta el wifi justo después de grabar el trabajo. El aviso dice "El
+presupuesto N° 16000 se guardó pero los renglones no. Reabrilo del historial y guardá de nuevo".
+Si se hace eso, funciona: el historial trae el `id_trabajo` verdadero y el guardado siguiente
+corrige la fila. El problema es el reflejo contrario, que es el natural: volver a apretar
+"Guardar y hacer PDF". Ahí se pide un número nuevo y se inserta **otro** trabajo.
+
+Quedan dos presupuestos numerados: el 16001 completo, y el 16000 con cliente, vehículo y mano de
+obra pero sin un solo renglón. En el historial el 16000 parece un presupuesto real con un total
+más bajo que el papel que se imprimió.
+
+**Por qué no se puede limpiar borrándolo.** `trabajos_borrar_solo_sin_numero` (feature 006)
+prohíbe borrar un trabajo con número, y eso está bien: de ahí depende RF-020. El 16000 se marca
+`no_concretado`, que es la salida que la spec ya prevé para un presupuesto que no fue — pero hay
+que saber que pasó, y nada avisa.
+
+**Distinto de H4.** H4 describe cliente y vehículo huérfanos: basura invisible y inofensiva.
+Esto escribe una fila *numerada*, visible en el historial, con un total que miente, y que por
+diseño no se borra.
+
+**Toca.** Nada del esquema. Es orquestación, y por el reparto que fijó H4 —opción 1— se arregla
+en la aplicación, no acá. Queda asentado como advertencia para el que toque `index.html`.
+
+**Arreglo propuesto, del lado de la página.** Que el que llama se quede con los identificadores
+en cuanto el trabajo existe, antes de los renglones, para que un segundo intento sea un PATCH y
+no un INSERT. Dos formas:
+
+1. Que `guardarEnBase()` reciba una función para avisar "el trabajo ya tiene este id y este
+   número", y la llame apenas termina el paso del trabajo.
+2. Que el error que lanza lleve los identificadores adentro, y que `guardarYPdf()` los guarde
+   también en el `catch`.
+
+La 2 es menos código y no cambia el orden de nada. Con cualquiera de las dos, apretar el botón
+de nuevo corrige el mismo presupuesto en vez de abrir otro, y no se gasta un segundo número.
+
+**Lo que sí anda y conviene no tocar.** El número se pide después del cliente y del vehículo, así
+que un error en esos pasos no gasta número. Y se pide una sola vez por trabajo, así que reeditar
+o guardar como pendiente no consume la serie. Las dos cosas están bien como están.
+
+---
+
+**RESUELTO** en el commit `6e419dc` del repositorio de la página. Se tomó la opción 2, con una
+variante: en vez de adornar cada error por separado, el tramo de los renglones queda envuelto en un
+`try` y cualquier error que salga de ahí lleva los identificadores puestos. Eso cubre también
+`sin-sesion`, que puede saltar si el token vence justo entre el trabajo y los renglones — un caso que
+la propuesta original dejaba afuera.
+
+Verificado con Chromium contra una API simulada, forzando el fallo de los renglones y volviendo a
+apretar Guardar:
+
+| | números pedidos | POST a `trabajos` | PATCH a `trabajos` | N° en pantalla |
+|---|---|---|---|---|
+| antes | 2 | 2 | 0 | `—` |
+| después | 1 | 1 | 1 | `16000` |
+
+Cuatro casos de regresión —emitir, dejar pendiente, pendiente y después emitir, emitir y guardar
+cambios— se comportan igual antes y después del cambio. El aviso ya no manda al historial: dice
+"Guardá de nuevo", porque ahora eso alcanza.
