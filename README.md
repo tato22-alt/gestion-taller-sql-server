@@ -20,7 +20,7 @@ consulta. La base reparte los números de presupuesto desde el 16000 y no puede 
 | 004 Chasis y observaciones | Implementado |
 | 005 Detalle de mano de obra | Implementado |
 | 006 Presupuestos pendientes | Implementado. Un trabajo todavía sin número |
-| 007 El borrador no se pierde | Especificado, sin aprobar. No toca la base |
+| 007 El borrador no se pierde | Implementado en la página (`ed81900`). No toca la base |
 
 El estado al día está en `ESTADO.md`, que es el punto de entrada cuando se vuelve al proyecto.
 
