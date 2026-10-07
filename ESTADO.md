@@ -68,10 +68,17 @@ obligatorios, guardar, reeditar, un fallo real a mitad del guardado, historial, 
 persistencia de sesión — pero **nunca contra el proyecto Supabase real desde este
 entorno**, que no tiene salida de red hacia él.
 
-**Lo que no está registrado acá:** si la cadena completa se ejercitó con un
-presupuesto real (login, pedir número, guardar, imprimir, reabrir del historial), y si
-ya salió el 16000. Cuando pase, anotarlo acá: es el único dato que convierte
-"debería funcionar" en "funciona".
+**Ejercitado con presupuestos reales.** Luciano confirmó el 2026-10-07 que la herramienta está
+en uso —en la computadora del taller y en el celular— y que el historial lista presupuestos
+desde el 16000 en adelante. El historial se arma con un `GET` a `vw_presupuestos`, así que eso
+prueba la cadena completa: login, número, trabajo, renglones y lectura posterior. El 16000
+salió. Esto es lo que convierte "debería funcionar" en "funciona".
+
+**Lo que sigue sin verificar:** si quedaron presupuestos de la versión anterior a la migración
+atrapados en el navegador. Esa versión guardaba todo en `localStorage`, bajo la clave
+`semaforo-presupuestos`, y la página de hoy no la lee. Ver el historial completo NO lo
+descarta: lo que quedó en el navegador es justamente lo que el historial no puede mostrar. Se
+comprueba en la computadora del taller, que es donde más probablemente corrió esa versión.
 
 **Dos cosas que resuelve la página, no la base:**
 
